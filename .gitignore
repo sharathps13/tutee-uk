@@ -6,6 +6,7 @@
 node_modules/
 
 # working files that are not part of the deployed site
+_legacy/
 scratch/
 output_texts.txt
 parse_react.py

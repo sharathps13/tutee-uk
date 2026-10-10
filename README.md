@@ -3,17 +3,134 @@
 A static rebuild of the USA landing page (https://pageus.netlify.app/#/) for the UK market.
 Same layout, same Tailwind classes, same animations — UK content.
 
+## October 2026 redesign of `index.html`
+
+The home page was rebuilt from scratch as a lead-generation page. All copy from the previous
+version is kept; the original markup is backed up at `_legacy/index.original.html` (git-ignored).
+The old `main.css` / `main.js` are no longer used by either page and were moved to `_legacy/`.
+
+```
+index.html                      the landing page (hand-written, semantic HTML)
+assets/css/landing.css          its stylesheet — tokens at the top (:root)
+assets/js/landing.js            its behaviour — one init function per component
+assets/vendor/gsap/             GSAP 3.15.0 + ScrollTrigger, SplitText, DrawSVG, MotionPath, Flip
+assets/vendor/lenis/            Lenis 1.3.26 smooth scroll
+assets/vendor/LICENSES.md       versions, licences, how to update
+```
+
+Libraries are self-hosted (not CDN) because the CSP is `script-src 'self'`. React Bits effects
+are re-implemented in vanilla JS (React Bits ships React components and this site has no
+React/build step) — see the "after React Bits <Name>" comments in `landing.js`.
+
+**Device strategy.** CSS always holds each section's finished, readable state; GSAP only
+animates *from* elsewhere. `gsap.matchMedia` gives pinned effects (welcome zoom, horizontal
+services) only to screens ≥1024 wide and ≥600 tall; smaller or short screens get native swipe
+and simple reveals; `prefers-reduced-motion` gets a static page with no Lenis. Lenis smooths
+the mouse wheel only (touch scroll stays native). The WebGL aurora renders at ½ resolution
+(⅓ on phones) and pauses off-screen / in background tabs; a CSS gradient is the fallback.
+Display type is sized with `min(vw, vh)` so 4:3, 16:10, 16:9, 21:9 and short laptop screens
+all fit. Verified with no horizontal overflow and no console errors at 390×844, 768×1024,
+1024×768, 1366×768, 1280×800, 1920×1080 and 2560×1080, plus reduced motion.
+
+Every section ends in a route to `#contact`, and context collected on the way is submitted
+with the lead as extra fields (the Netlify function forwards unknown fields as email rows):
+
+| Component | Sends |
+|---|---|
+| Hero booking bar (level / intake / funding) and step 1 of the form | `study_level`, `intake`, `funding` |
+| UK map hearts (+ `selectedUniversity` from the directory) | `shortlist` |
+| Any `[data-goto]` link with `data-intent`, or the "I need help with" dropdown | `destination` = `UK – <interest>` |
+
+Every section has its own layout and interaction:
+
+| Section | Layout / interaction |
+|---|---|
+| Hero | full-bleed Oxford photo (pointer + scroll parallax), white headline with highlighter swipe, *RotatingText*, *BlurText*, floating highlight cards, a travel-style booking bar (level / intake / funding dropdowns) that sends visitors to step 2 of the enquiry, and a stats row |
+| Welcome | pinned: Oxford photo zooms from framed card to full bleed, counters (*CountUp*) |
+| Journey | central spine fills on scroll with a plane riding the tip; steps alternate left/right in three phases |
+| Ticker | always glides gently; scrolling speeds it up and flips direction (*ScrollVelocity*); pauses on hover |
+| Why UK | library photo background (clipped, no edges on parallax), heading + copy row, four aligned stat tiles with icons (*SpotlightCard*), feature pills |
+| Services | pinned horizontal track (no visible scrollbar/progress bar); a card expands into its detail panel with GSAP Flip |
+| Universities | coastline draws, pins pop in, city card → heart to shortlist |
+| Scholarships | intro + expanding panels: hover/focus/tap widens a panel to show its detail, the others collapse to vertical labels (stacked on phones) |
+| Loans | animated *GradientText*, *ScrollReveal*, lender *LogoLoop* |
+| Settle | compact: four-step visa ladder (swipeable row on phones), proof cards and a family card (MRes and PhD students relocating with their families) |
+| Testimonials | "wall of love": two columns of quote cards drift past each other (rows on phones); pauses on hover/focus, off-screen and via a Pause button; a still grid with reduced motion |
+| FAQs | centred: search, segmented topic tabs with a sliding pill, icon + tag accordion with an "ask about this" link per answer, "still have a question?" banner; filters never open answers |
+| Contact | no contact details by design: a large boarding pass whose stub fills in live (name, level, intake, funding, topic) beside the two-step form; four "what you get" perks underneath; DrawSVG check + confetti on success |
+| Footer | light: "Ready for take-off?" CTA, Explore, Destinations chips, Talk-to-us (WhatsApp/Call/Email/Website, all white tiles with maroon icons) |
+
+Contact details everywhere: +91 73583 64959 (call & WhatsApp), info@tuteeconnect.com,
+www.tuteeconnect.com. **Footer destination chips** other than UK/USA currently link to
+www.tuteeconnect.com — replace each `href` in the footer with that country's landing page URL.
+
+**universities.html** was redesigned to match: dark search hero, sticky nation/type filters and
+sort, animated (GSAP Flip) result grid of the 499 institutions, 24 at a time, with a shortlist
+heart on each card. Hearted institutions fill a tray. **The page has no form of its own**: every
+"apply" / "free evaluation" link sends the visitor to the consultation form on the home page
+(`index.html#contact`), carrying the shortlist and topic with them (`handOffToHome()` in
+`landing.js`: saved in `localStorage` as `tcHandoff`, or passed as `?handoff=` when storage is
+blocked; the home page reads it in `initForm()` and `arriveAtForm()` lands on the form once the
+layout settles). All of its `#contact` links point at `./index.html#contact`. It uses
+`landing.css`, `landing.js` and
+`assets/js/universities.js`. The
+`offerRate` placeholder is not displayed. The old page is backed up at
+`_legacy/universities.original.html`.
+
+**Performance.** Stress-tested with headless Edge over CDP (load metrics plus frame timing while the
+whole page is scrolled with real wheel/touch gestures) at 2560x1080, 1920x1080, 1440x900, 1366x768,
+1024x768, 768x1024 and 390x844 with 2–4x CPU throttling and simulated slow 4G. What keeps it fast:
+- Photos are responsive WebP in `<picture>` (640/960/1400w in `assets/img/opt/`, JPEG fallback); the
+  hero is preloaded with `imagesrcset`. Logo/icon are resized copies (the old 1000px icon was 186 KB).
+  A phone downloads ~460 KB in total.
+- `assets/js/flag.js` (tiny, in `<head>`) sets `.js` before the first paint and holds the hero copy
+  for at most 0.6 s so it never flashes before its entrance animation.
+- `landing.js` boots in two phases: the first screen before the first paint, everything else one
+  init per task afterwards; heading splits run in ~8 ms idle chunks. No long task blocks input.
+- Nothing reads layout inside scroll handlers (page height, ticker width, journey line are cached;
+  the mobile CTA uses an IntersectionObserver). Infinite CSS animations use transform/opacity only
+  and pause while their section is off screen (`.is-off`). Touch devices drop backdrop blur.
+- Quicksand is one variable-font face per subset (weights 300–800) with the Latin file preloaded.
+If you add an effect, keep it to `transform`/`opacity`, and avoid reading `offsetHeight`,
+`scrollWidth` or `getBoundingClientRect()` per frame.
+
+**University details.** Opening a university (map list on the home page, any card on
+universities.html) shows a details sheet (side panel; bottom sheet on phones): rank (only when
+`ranked`), type, city/nation, what it's known for, how we help, a shortlist toggle, the live shortlist
+with remove buttons, and "Get free guidance / Apply with my shortlist", which jumps to the form.
+Every heart goes through `setShort()` in `landing.js` (exposed as `TC.setShort` / `TC.onShortlist`),
+so the map, directory cards, tray, sheet, form chips and the boarding-pass "Shortlist" line stay in
+sync, and the list is submitted with the lead as `shortlist`. The map's names and ranks match
+`universities-data.js`.
+
+**Dropdowns.** Every `<select>` on both pages (hero, form, country code, directory sort) is upgraded by
+`initDropdowns()` in `landing.js` to a custom listbox: animated panel, check mark on the chosen option,
+search box for long lists (country codes), full keyboard support. The native select stays in the
+form as the value, so validation and submission are unchanged. Add `data-native` to opt out.
+
+Global: Lenis smooth scroll, scroll progress bar, *ClickSpark* bursts, custom cursor
+(fine pointers only), circular-reveal menu, back-to-top ring, mobile sticky CTA, WhatsApp,
+Tutee AI chat.
+The UK map outline is drawn from approximate coastline coordinates in `landing.js` (`GB`, `NI`)
+— stylised, not survey-accurate.
+
+**No monetary values appear anywhere on the page** (no fees, wages, currency amounts,
+ROI or calculators) — costs are discussed by counsellors. Keep it that way when editing copy.
+Sections are deliberately compact: `--sec-pad` in `landing.css` sets the vertical rhythm.
+The phone country code defaults to IN (+91).
+
 ## Files
 
 ```
 Start Local Server.command      double-click to preview locally (macOS)
 serve.py                        the preview server it runs
-index.html                      home page (10 sections)
+index.html                      home page (see redesign notes above)
 universities.html               UK university directory
-assets/css/main.css             the reference site's compiled Tailwind output (verbatim, 2 URLs repointed)
+assets/css/landing.css          index.html styles
+assets/js/landing.js            index.html behaviour
 assets/css/quicksand.css        webfont declarations
 assets/fonts/*.woff2            Quicksand
-assets/js/main.js               all interactivity (replaces the React app)
+assets/js/universities.js       universities.html directory (filters, Flip grid, shortlist)
 assets/js/services-data.js      the 9 service tabs: title, tagline, body copy, icon
 assets/js/universities-data.js  499 UK institutions (universities, colleges, specialist providers)
 assets/img/...                  logos, photos, lender logos
