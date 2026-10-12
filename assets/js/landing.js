@@ -96,30 +96,56 @@
     var tl = G.timeline({ defaults: { ease: 'expo.out' }, delay: 0.1, onStart: function () { hero.classList.add('is-ready'); } });
     var title = $('[data-hero-title]');
     if (title && window.SplitText) {
-      var split = SplitText.create(title, { type: 'words,chars', mask: 'words', aria: 'auto' });
-      tl.from(split.chars, { yPercent: 110, duration: 1, stagger: 0.022 }, 0);
+      // words rise slowly out of their masks, like a title card
+      var split = SplitText.create(title, { type: 'words', mask: 'words', aria: 'auto' });
+      tl.from(split.words, { yPercent: 115, duration: 1.6, stagger: 0.08, ease: 'expo.out' }, 0.35);
     }
-    tl.from('[data-hero-in]', { y: 30, opacity: 0, duration: 1, stagger: 0.1 }, 0.25);
+    tl.from('[data-hero-in]', { y: 24, opacity: 0, duration: 1.4, stagger: 0.12 }, 0.6);
     var sub = $('[data-blur-in]');
     if (sub && window.SplitText) {
       // after React Bits BlurText
       var s2 = SplitText.create(sub, { type: 'words', aria: 'auto' });
-      tl.from(s2.words, { filter: 'blur(10px)', opacity: 0, y: 12, duration: 0.8, stagger: 0.02, ease: 'power2.out' }, 0.45);
+      tl.from(s2.words, { filter: 'blur(8px)', opacity: 0, y: 10, duration: 1, stagger: 0.015, ease: 'power2.out' }, 0.8);
     }
     var img = $('[data-hero-img]');
-    if (img) tl.from(img, { scale: 1.3, duration: 2.4, ease: 'power3.out' }, 0);
-    tl.from('.hero-floats > *', { y: 80, scale: 0.85, opacity: 0, duration: 1.4, stagger: 0.12 }, 0.5);
-    // the route draws itself, then a plane flies it on a loop
-    var route = $('[data-route-draw]'), plane = $('[data-plane]'), path = $('[data-route]');
-    if (route && window.DrawSVGPlugin) tl.from(route, { drawSVG: '0%', duration: 2.2, ease: 'power2.inOut' }, 0.6);
-    if (plane && path && window.MotionPathPlugin) {
-      tl.add(function () {
-        G.set(plane, { opacity: 1 });
-        G.to(plane, { motionPath: { path: path, align: path, alignOrigin: [0.5, 0.5], autoRotate: 45 }, duration: 11, ease: 'none', repeat: -1, repeatDelay: 1.5 });
-      }, 1.6);
-    }
+    if (img) tl.from(img, { scale: 1.12, opacity: 0, duration: 2.6, ease: 'power3.out' }, 0);
     // every from-state above is already applied, so the copy can show now
     root.classList.remove('hero-wait');
+  }
+
+  /* ================================================================= *
+   * Hero tour: HD photos of the four nations crossfade behind the
+   * welcome. The tour list's progress bar is a CSS animation, so its
+   * animationend advances the slide; that also means it pauses for free
+   * while the hero is off screen (.is-off) or hovered. Each next photo's
+   * srcset is filled in just before it is shown, so only one loads up front.
+   * ================================================================= */
+  function initTour() {
+    var hero = $('[data-tour]');
+    if (!hero) return;
+    var slides = $$('.hs', hero), items = $$('.hero-tour-list li', hero), tour = $('.hero-tour', hero);
+    var credit = $('[data-hero-credit]', hero), tpl = $('template[data-credits]', hero);
+    var credits = tpl ? tpl.innerHTML.split('|') : [], i = 0;
+    function prime(n) {
+      var src = $('source[data-srcset]', slides[n]);
+      if (src) { src.srcset = src.getAttribute('data-srcset'); src.removeAttribute('data-srcset'); }
+    }
+    function show(n) {
+      i = (n + slides.length) % slides.length;
+      prime(i); prime((i + 1) % slides.length);
+      slides.forEach(function (s, k) { s.classList.toggle('is-active', k === i); });
+      items.forEach(function (li, k) { li.classList.toggle('is-active', k === i); });
+      if (credit && credits[i]) credit.textContent = credits[i];
+    }
+    items.forEach(function (li, k) {
+      $('button', li).addEventListener('click', function () { show(k); });
+      $('.ht-bar', li).addEventListener('animationend', function () { if (k === i) show(i + 1); });
+    });
+    tour.addEventListener('pointerenter', function () { tour.classList.add('is-paused'); });
+    tour.addEventListener('pointerleave', function () { tour.classList.remove('is-paused'); });
+    // reduced motion: no autoplay (the bars never run), clicks still work
+    if (reduce) $$('.ht-bar', hero).forEach(function (b) { b.style.animation = 'none'; });
+    idle(function () { prime(1); });
   }
 
   /* after React Bits RotatingText */
@@ -158,16 +184,7 @@
     var heroImg = $('[data-hero-img]');
     if (heroImg) {
       var hx = G.quickTo(heroImg, 'x', { duration: 1, ease: 'power3' }), hy = G.quickTo(heroImg, 'y', { duration: 1, ease: 'power3' });
-      // floating cards drift further than the photo, each by its own depth
-      var floats = $$('[data-depth]').map(function (el) {
-        var d = +el.getAttribute('data-depth');
-        return { d: d, x: G.quickTo(el, 'x', { duration: 1.2, ease: 'power3' }), y: G.quickTo(el, 'y', { duration: 1.2, ease: 'power3' }) };
-      });
-      $('.hero').addEventListener('pointermove', function (e) {
-        var px = e.clientX / innerWidth - 0.5, py = e.clientY / innerHeight - 0.5;
-        hx(px * -22); hy(py * -14);
-        floats.forEach(function (f) { f.x(px * 28 * f.d); f.y(py * 20 * f.d); });
-      });
+      $('.hero').addEventListener('pointermove', function (e) { hx((e.clientX / innerWidth - 0.5) * -18); hy((e.clientY / innerHeight - 0.5) * -12); });
     }
     var dot = $('.cursor-dot'), ring = $('.cursor-ring'), cur = $('[data-cursor]');
     // set directly on every pointer event (no easing), so it never trails the mouse
@@ -371,11 +388,7 @@
       var heroBody = $('[data-hero-body]');
       if (heroBody && big) {
         var heroOut = { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true };
-        G.to(heroBody, { yPercent: -14, scale: 0.94, opacity: 0.1, ease: 'none', scrollTrigger: heroOut });
-        // the floats rise past the headline at their own speeds (depth)
-        $$('.hero-floats [data-depth]').forEach(function (el) {
-          G.to(el, { yPercent: -60 * +el.getAttribute('data-depth'), ease: 'none', scrollTrigger: heroOut });
-        });
+        G.to(heroBody, { yPercent: -10, opacity: 0, ease: 'none', scrollTrigger: heroOut });
       }
       var whyBg = $('[data-why-bg]');
       if (whyBg) G.fromTo(whyBg, { yPercent: -8 }, { yPercent: 8, ease: 'none', scrollTrigger: { trigger: '.why', start: 'top bottom', end: 'bottom top', scrub: true } });
@@ -1673,6 +1686,7 @@
     initGoto();
     initForm();
     initRotator();
+    initTour();
     initSections();
     heroEntrance();
     // phase 2 — below-the-fold features, after the first frame, one per task

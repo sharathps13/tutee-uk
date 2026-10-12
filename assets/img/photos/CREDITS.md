@@ -47,3 +47,18 @@ credits line or an image caption).
 > Photography: Radcliffe Camera, Oxford © Julian Herzog (CC BY 4.0);
 > Notting Hill, London © Bex Walton (CC BY 2.0); John Rylands Library,
 > Manchester by Michael D Beckwith (CC0). Via Wikimedia Commons.
+
+---
+
+## Hero tour (`#home`) — HD images in `assets/img/hero/`
+
+Downscaled from the full-resolution Commons originals (2560/1920/1280/828px
+WebP). Each credit is shown in the hero, bottom-right, while its photo is on
+screen.
+
+| File | Depicts | Author | Licence | Source |
+|---|---|---|---|---|
+| `oxford-*` | Radcliffe Camera, Oxford | Julian Herzog | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:Radcliffe_Camera_Oxford_2018_02.jpg |
+| `edinburgh-*` | Edinburgh Castle Rock and Old Town | Saffron Blaze | CC BY-SA 3.0 | https://commons.wikimedia.org/wiki/File:Edinburgh_Castle_Rock.jpg |
+| `cardiff-*` | Cardiff Castle keep | Ввласенко | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:Cardiff_Castle,_Wales,_GB.jpg |
+| `belfast-*` | Titanic Belfast | Suicasmo | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Titanic_Signature_Building,_Belfast_20180427.jpg |
