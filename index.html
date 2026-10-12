@@ -118,88 +118,61 @@
 <main>
 
 <!-- ================================================================== HERO -->
-<!-- full-bleed Oxford photo, headline on the left, floating info cards on the
-     right, and a travel-style "booking bar" (level / intake / funding) -->
+<!-- a cinematic welcome: the Oxford photo slowly zooms, a plane flies a
+     dotted route across it, postcards and fact cards float at different
+     depths around a centred headline, and a ribbon of UK cities runs along
+     the foot with a cue to scroll on -->
 <section id="home" class="hero" data-section>
-  <div class="hero-media" aria-hidden="true"><picture><source type="image/webp" srcset="./assets/img/opt/students-campus-640.webp 640w, ./assets/img/opt/students-campus-960.webp 960w, ./assets/img/opt/students-campus-1400.webp 1400w" sizes="100vw"><img src="./assets/img/photos/students-campus.jpg" alt="" width="1400" height="779" fetchpriority="high" data-hero-img decoding="async"></picture></div>
+  <div class="hero-media" aria-hidden="true"><div class="hero-kb"><picture><source type="image/webp" srcset="./assets/img/opt/students-campus-640.webp 640w, ./assets/img/opt/students-campus-960.webp 960w, ./assets/img/opt/students-campus-1400.webp 1400w" sizes="100vw"><img src="./assets/img/photos/students-campus.jpg" alt="" width="1400" height="779" fetchpriority="high" data-hero-img decoding="async"></picture></div></div>
   <div class="hero-shade" aria-hidden="true"></div>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <svg class="hero-route" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><mask id="hero-route-mask" maskUnits="userSpaceOnUse"><path data-route-draw d="M-80 790 C 300 770, 560 780, 820 760 S 1120 700, 1220 560 S 1340 420, 1540 400" fill="none" stroke="#fff" stroke-width="10"/></mask></defs>
+    <path data-route d="M-80 790 C 300 770, 560 780, 820 760 S 1120 700, 1220 560 S 1340 420, 1540 400" fill="none" mask="url(#hero-route-mask)"/>
+    <g class="hero-plane" data-plane><circle r="22"/><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" transform="translate(-12 -12)"/></g>
+  </svg>
 
-  <div class="wrap hero-inner">
-    <div class="hero-main">
-      <div class="hero-copy">
-        <p class="hero-badge" data-hero-in><span class="dot"></span>UK Education Experts</p>
-        <h1 class="hero-title" data-hero-title>Your route map to the <span class="hl">UK dream.</span></h1>
-        <p class="hero-rotate" data-hero-in>
-          <span>We guide you through</span>
-          <span class="rotator" data-rotator data-words="admissions,scholarships,your Student visa,the Graduate Route,settlement"><span class="rotator-word">admissions</span></span>
-        </p>
-        <p class="hero-sub" data-blur-in>We don't just facilitate UK Student Visas; we transform lives. Join the preferred choice for those seeking excellence in United Kingdom higher education.</p>
-        <div class="hero-actions" data-hero-in>
-          <a class="btn btn-sun" href="#contact" data-goto data-intent="Career Consultation" data-magnet><span>Book a free consultation</span><svg class="icon"><use href="#i-arrow"/></svg></a>
-          <a class="btn btn-glass" href="#journey"><span>How it works</span><svg class="icon"><use href="#i-down"/></svg></a>
-        </div>
-      </div>
-
-      <div class="hero-float" aria-label="Highlights">
-        <a class="hf hf-1" href="#contact" data-goto data-float>
-          <span class="hf-av"><img src="./assets/img/opt/icon-96.png" alt="" width="34" height="34"><i></i></span>
-          <span><b>Counsellor online</b><small>Book a free consultation</small></span>
-          <svg class="icon icon-sm"><use href="#i-arrow"/></svg>
-        </a>
-        <div class="hf hf-2" data-float>
-          <span class="hf-ic"><svg class="icon"><use href="#i-award"/></svg></span>
-          <span><b>Graduate Route</b><small>2 years to work after you graduate</small></span>
-        </div>
-        <div class="hf hf-3" data-float>
-          <span class="hf-ic hf-ic-teal"><svg class="icon"><use href="#i-shield"/></svg></span>
-          <span><b>99% visa success</b><small>Mock credibility interviews included</small></span>
-        </div>
-      </div>
+  <div class="hero-floats" aria-hidden="true">
+    <figure class="pc pc-1" data-depth="1.2">
+      <picture><source type="image/webp" srcset="./assets/img/opt/uk-city-640.webp"><img src="./assets/img/opt/uk-city-640.webp" alt="" width="640" height="427" loading="lazy" decoding="async"></picture>
+      <figcaption><b><svg class="icon icon-sm"><use href="#i-pin"/></svg>London</b><small>Global careers start here</small></figcaption>
+    </figure>
+    <figure class="pc pc-2" data-depth="1.6">
+      <picture><source type="image/webp" srcset="./assets/img/opt/team-working-640.webp"><img src="./assets/img/opt/team-working-640.webp" alt="" width="640" height="427" loading="lazy" decoding="async"></picture>
+      <figcaption><b><svg class="icon icon-sm"><use href="#i-pin"/></svg>Manchester</b><small>One-year Master's degrees</small></figcaption>
+    </figure>
+    <div class="fc fc-1" data-depth="2.2">
+      <span class="fc-ic"><svg class="icon"><use href="#i-briefcase"/></svg></span>
+      <span><b>Graduate Route</b><small>2 years to work after you graduate</small></span>
     </div>
+    <div class="fc fc-2" data-depth="0.8">
+      <span class="fc-ic fc-ic-teal"><svg class="icon"><use href="#i-shield"/></svg></span>
+      <span><b>99% visa success</b><small>200+ UK university tie-ups</small></span>
+    </div>
+  </div>
 
-    <form class="book" data-hero-pass novalidate aria-label="Plan your UK journey">
-      <p class="book-label"><svg class="icon icon-sm"><use href="#i-plane"/></svg>Plan your UK journey</p>
-      <div class="book-row">
-        <div class="fl fl-select book-f">
-          <select id="h-level" data-pass="study_level">
-            <option value="" data-placeholder>Choose a level</option>
-            <option value="Undergraduate">Undergraduate</option>
-            <option value="Postgraduate (Master's)">Master's degree</option>
-            <option value="MBA">MBA</option>
-            <option value="PhD / Research">PhD or research</option>
-          </select>
-          <label for="h-level">What will you study?</label>
-        </div>
-        <div class="fl fl-select book-f">
-          <select id="h-intake" data-pass="intake">
-            <option value="" data-placeholder>Choose an intake</option>
-            <option value="January 2027">January 2027</option>
-            <option value="September 2027">September 2027</option>
-            <option value="2028 or later">2028 or later</option>
-            <option value="Not sure yet">Not sure yet</option>
-          </select>
-          <label for="h-intake">When do you want to start?</label>
-        </div>
-        <div class="fl fl-select book-f">
-          <select id="h-funding" data-pass="funding">
-            <option value="" data-placeholder>Choose an option</option>
-            <option value="Self / family funded">Self or family</option>
-            <option value="Education loan">Education loan</option>
-            <option value="Scholarship">Scholarship</option>
-            <option value="Need guidance">I need guidance</option>
-          </select>
-          <label for="h-funding">How will you fund it?</label>
-        </div>
-        <button class="btn btn-maroon book-go" type="submit"><span>Get my free route map</span><svg class="icon"><use href="#i-arrow"/></svg></button>
-      </div>
-    </form>
+  <div class="wrap hero-inner" data-hero-body>
+    <p class="hero-eyebrow" data-hero-in><span class="dot"></span>Welcome to Tutee Connect<span class="hero-eyebrow-more"><i aria-hidden="true">/</i> UK education experts</span></p>
+    <h1 class="hero-title" data-hero-title>Your route map to the <span class="hl">UK dream.</span></h1>
+    <p class="hero-rotate" data-hero-in>
+      <span>We guide you through</span>
+      <span class="rotator" data-rotator data-words="admissions,scholarships,your Student visa,the Graduate Route,settlement"><span class="rotator-word">admissions</span></span>
+    </p>
+    <p class="hero-sub" data-blur-in>We don't just facilitate UK Student Visas; we transform lives. Join the preferred choice for those seeking excellence in United Kingdom higher education.</p>
+    <div class="hero-actions" data-hero-in>
+      <a class="btn btn-sun" href="#welcome" data-magnet><span>Start exploring</span><svg class="icon"><use href="#i-down"/></svg></a>
+      <a class="btn btn-glass" href="#contact" data-goto data-intent="Career Consultation"><span>Book a free consultation</span><svg class="icon"><use href="#i-arrow"/></svg></a>
+    </div>
+  </div>
 
-    <ul class="hero-stats" data-hero-in>
-      <li><b><span data-count="99">99</span>%</b><span>Visa success rate</span></li>
-      <li><b><span data-count="200">200</span>+</b><span>UK university tie-ups</span></li>
-      <li><b><span data-count="5">5</span>k+</b><span>Students guided</span></li>
-      <li><b><span data-count="4">4</span></b><span>Nations: England, Scotland, Wales, N. Ireland</span></li>
-    </ul>
+  <a class="hero-scroll" href="#welcome" data-hero-in><i aria-hidden="true"></i><span>Scroll to explore</span></a>
+
+  <div class="hero-ribbon" data-hero-in>
+    <p class="hero-ribbon-label"><svg class="icon icon-sm"><use href="#i-globe"/></svg><span>Study across all four UK nations</span><span class="rl-short">4 UK nations</span></p>
+    <div class="hero-ribbon-track" aria-hidden="true">
+      <span>London</span><span>Edinburgh</span><span>Manchester</span><span>Cardiff</span><span>Oxford</span><span>Glasgow</span><span>Belfast</span><span>Cambridge</span><span>Birmingham</span><span>Swansea</span><span>Bristol</span><span>Aberdeen</span><span>Leeds</span><span>Liverpool</span>
+      <span>London</span><span>Edinburgh</span><span>Manchester</span><span>Cardiff</span><span>Oxford</span><span>Glasgow</span><span>Belfast</span><span>Cambridge</span><span>Birmingham</span><span>Swansea</span><span>Bristol</span><span>Aberdeen</span><span>Leeds</span><span>Liverpool</span>
+    </div>
   </div>
 </section>
 
@@ -847,6 +820,7 @@
 <script src="./assets/vendor/gsap/ScrollTrigger.min.js" defer></script>
 <script src="./assets/vendor/gsap/SplitText.min.js" defer></script>
 <script src="./assets/vendor/gsap/DrawSVGPlugin.min.js" defer></script>
+<script src="./assets/vendor/gsap/MotionPathPlugin.min.js" defer></script>
 <script src="./assets/vendor/gsap/Flip.min.js" defer></script>
 <script src="./assets/vendor/lenis/lenis.min.js" defer></script>
 <script src="./assets/js/landing.js" defer></script>

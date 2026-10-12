@@ -107,9 +107,17 @@
       tl.from(s2.words, { filter: 'blur(10px)', opacity: 0, y: 12, duration: 0.8, stagger: 0.02, ease: 'power2.out' }, 0.45);
     }
     var img = $('[data-hero-img]');
-    if (img) tl.from(img, { scale: 1.25, duration: 2.4, ease: 'power3.out' }, 0);
-    tl.from('.book', { y: 50, opacity: 0, duration: 1.1 }, 0.55)
-      .from($$('[data-float]'), { x: 60, opacity: 0, stagger: 0.12, duration: 1, ease: 'back.out(1.4)' }, 0.7);
+    if (img) tl.from(img, { scale: 1.3, duration: 2.4, ease: 'power3.out' }, 0);
+    tl.from('.hero-floats > *', { y: 80, scale: 0.85, opacity: 0, duration: 1.4, stagger: 0.12 }, 0.5);
+    // the route draws itself, then a plane flies it on a loop
+    var route = $('[data-route-draw]'), plane = $('[data-plane]'), path = $('[data-route]');
+    if (route && window.DrawSVGPlugin) tl.from(route, { drawSVG: '0%', duration: 2.2, ease: 'power2.inOut' }, 0.6);
+    if (plane && path && window.MotionPathPlugin) {
+      tl.add(function () {
+        G.set(plane, { opacity: 1 });
+        G.to(plane, { motionPath: { path: path, align: path, alignOrigin: [0.5, 0.5], autoRotate: 45 }, duration: 11, ease: 'none', repeat: -1, repeatDelay: 1.5 });
+      }, 1.6);
+    }
     // every from-state above is already applied, so the copy can show now
     root.classList.remove('hero-wait');
   }
@@ -150,7 +158,16 @@
     var heroImg = $('[data-hero-img]');
     if (heroImg) {
       var hx = G.quickTo(heroImg, 'x', { duration: 1, ease: 'power3' }), hy = G.quickTo(heroImg, 'y', { duration: 1, ease: 'power3' });
-      $('.hero').addEventListener('pointermove', function (e) { hx((e.clientX / innerWidth - 0.5) * -22); hy((e.clientY / innerHeight - 0.5) * -14); });
+      // floating cards drift further than the photo, each by its own depth
+      var floats = $$('[data-depth]').map(function (el) {
+        var d = +el.getAttribute('data-depth');
+        return { d: d, x: G.quickTo(el, 'x', { duration: 1.2, ease: 'power3' }), y: G.quickTo(el, 'y', { duration: 1.2, ease: 'power3' }) };
+      });
+      $('.hero').addEventListener('pointermove', function (e) {
+        var px = e.clientX / innerWidth - 0.5, py = e.clientY / innerHeight - 0.5;
+        hx(px * -22); hy(py * -14);
+        floats.forEach(function (f) { f.x(px * 28 * f.d); f.y(py * 20 * f.d); });
+      });
     }
     var dot = $('.cursor-dot'), ring = $('.cursor-ring'), cur = $('[data-cursor]');
     // set directly on every pointer event (no easing), so it never trails the mouse
@@ -350,6 +367,16 @@
       /* Hero photo drifts slower than the page; Why-UK photo parallax. */
       var heroImg = $('[data-hero-img]');
       if (heroImg) G.fromTo(heroImg, { yPercent: 0 }, { yPercent: -7, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
+      // big screens: the hero content lifts away and fades as the page takes over
+      var heroBody = $('[data-hero-body]');
+      if (heroBody && big) {
+        var heroOut = { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true };
+        G.to(heroBody, { yPercent: -14, scale: 0.94, opacity: 0.1, ease: 'none', scrollTrigger: heroOut });
+        // the floats rise past the headline at their own speeds (depth)
+        $$('.hero-floats [data-depth]').forEach(function (el) {
+          G.to(el, { yPercent: -60 * +el.getAttribute('data-depth'), ease: 'none', scrollTrigger: heroOut });
+        });
+      }
       var whyBg = $('[data-why-bg]');
       if (whyBg) G.fromTo(whyBg, { yPercent: -8 }, { yPercent: 8, ease: 'none', scrollTrigger: { trigger: '.why', start: 'top bottom', end: 'bottom top', scrub: true } });
 
