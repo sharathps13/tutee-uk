@@ -94,12 +94,15 @@
     var held = root.classList.contains('hero-wait');
     if (!hasGsap || reduce || !held) { root.classList.remove('hero-wait'); hero.classList.add('is-ready'); return; }
     var tl = G.timeline({ defaults: { ease: 'expo.out' }, delay: 0.1, onStart: function () { hero.classList.add('is-ready'); } });
-    var title = $('[data-hero-title]');
-    if (title && window.SplitText) {
-      // words rise slowly out of their masks, like a title card
-      var split = SplitText.create(title, { type: 'words', mask: 'words', aria: 'auto' });
-      tl.from(split.words, { yPercent: 115, duration: 1.6, stagger: 0.08, ease: 'expo.out' }, 0.35);
+    var titles = $$('[data-hero-title]');
+    if (titles.length && window.SplitText) {
+      // words rise out of their masks
+      var words = [];
+      titles.forEach(function (t) { words = words.concat(SplitText.create(t, { type: 'words', mask: 'words', aria: 'auto' }).words); });
+      tl.from(words, { yPercent: 115, duration: 1.3, stagger: 0.06, ease: 'expo.out' }, 0.2);
     }
+    tl.from('.hero-cap', { scaleX: 0, duration: 1.1, ease: 'expo.inOut' }, 0.55)
+      .from('.dc', { y: 120, rotate: 0, opacity: 0, duration: 1.4, stagger: { each: 0.1, from: 'end' }, ease: 'expo.out', clearProps: 'transform,opacity' }, 0.3);
     tl.from('[data-hero-in]', { y: 24, opacity: 0, duration: 1.4, stagger: 0.12 }, 0.6);
     var sub = $('[data-blur-in]');
     if (sub && window.SplitText) {
@@ -108,7 +111,7 @@
       tl.from(s2.words, { filter: 'blur(8px)', opacity: 0, y: 10, duration: 1, stagger: 0.015, ease: 'power2.out' }, 0.8);
     }
     var img = $('[data-hero-img]');
-    if (img) tl.from(img, { scale: 1.12, opacity: 0, duration: 2.6, ease: 'power3.out' }, 0);
+    if (img) tl.from(img, { scale: 1.12, duration: 2.6, ease: 'power3.out' }, 0);
     // every from-state above is already applied, so the copy can show now
     root.classList.remove('hero-wait');
   }
@@ -123,30 +126,37 @@
   function initTour() {
     var hero = $('[data-tour]');
     if (!hero) return;
-    var slides = $$('.hs', hero), items = $$('.hero-tour-list li', hero), tour = $('.hero-tour', hero);
+    var cards = $$('.dc', hero), caps = $$('.hero-cap img', hero), bgs = $$('.hero-bg img', hero), items = $$('.hero-tour-list li', hero), tour = $('.hero-tour', hero);
     var credit = $('[data-hero-credit]', hero), tpl = $('template[data-credits]', hero);
-    var credits = tpl ? tpl.innerHTML.split('|') : [], i = 0;
-    function prime(n) {
-      var src = $('source[data-srcset]', slides[n]);
-      if (src) { src.srcset = src.getAttribute('data-srcset'); src.removeAttribute('data-srcset'); }
-    }
-    function show(n) {
-      i = (n + slides.length) % slides.length;
-      prime(i); prime((i + 1) % slides.length);
-      slides.forEach(function (s, k) { s.classList.toggle('is-active', k === i); });
-      items.forEach(function (li, k) { li.classList.toggle('is-active', k === i); });
+    var credits = tpl ? tpl.innerHTML.split('|') : [], n = cards.length, i = 0, timer = null;
+    function show(k) {
+      k = (k + n) % n;
+      if (k === i) return;
+      // the old front card swings out to the left, then settles at the back
+      var leaving = cards[i];
+      leaving.classList.add('is-leaving');
+      clearTimeout(timer);
+      timer = setTimeout(function () { leaving.classList.remove('is-leaving'); }, 520);
+      i = k;
+      cards.forEach(function (c, j) { c.setAttribute('data-d', (j - i + n) % n); });
+      caps.forEach(function (im, j) { im.classList.toggle('is-active', j === i); });
+      bgs.forEach(function (im, j) { im.classList.toggle('is-active', j === i); });
+      items.forEach(function (li, j) { li.classList.toggle('is-active', j === i); });
       if (credit && credits[i]) credit.textContent = credits[i];
     }
-    items.forEach(function (li, k) {
-      $('button', li).addEventListener('click', function () { show(k); });
-      $('.ht-bar', li).addEventListener('animationend', function () { if (k === i) show(i + 1); });
+    items.forEach(function (li, j) {
+      $('button', li).addEventListener('click', function () { show(j); });
+      $('.ht-bar', li).addEventListener('animationend', function () { if (j === i) show(i + 1); });
     });
-    tour.addEventListener('pointerenter', function () { tour.classList.add('is-paused'); });
-    tour.addEventListener('pointerleave', function () { tour.classList.remove('is-paused'); });
+    // clicking a card behind the front one brings it forward
+    cards.forEach(function (c, j) { c.addEventListener('click', function () { if (j !== i) show(j); }); });
+    var visual = $('.hero-visual', hero);
+    visual.addEventListener('pointerenter', function () { tour.classList.add('is-paused'); });
+    visual.addEventListener('pointerleave', function () { tour.classList.remove('is-paused'); });
     // reduced motion: no autoplay (the bars never run), clicks still work
     if (reduce) $$('.ht-bar', hero).forEach(function (b) { b.style.animation = 'none'; });
-    idle(function () { prime(1); });
   }
+
 
   /* after React Bits RotatingText */
   function initRotator() {
@@ -184,7 +194,13 @@
     var heroImg = $('[data-hero-img]');
     if (heroImg) {
       var hx = G.quickTo(heroImg, 'x', { duration: 1, ease: 'power3' }), hy = G.quickTo(heroImg, 'y', { duration: 1, ease: 'power3' });
-      $('.hero').addEventListener('pointermove', function (e) { hx((e.clientX / innerWidth - 0.5) * -18); hy((e.clientY / innerHeight - 0.5) * -12); });
+      // the deck tilts toward the pointer in 3D; the backdrop drifts the other way
+      var deck = $('[data-deck]'), drx = deck && G.quickTo(deck, 'rotationX', { duration: 1, ease: 'power3' }), dry = deck && G.quickTo(deck, 'rotationY', { duration: 1, ease: 'power3' });
+      $('.hero').addEventListener('pointermove', function (e) {
+        var px = e.clientX / innerWidth - 0.5, py = e.clientY / innerHeight - 0.5;
+        hx(px * -24); hy(py * -16);
+        if (deck) { dry(px * 14); drx(py * -10); }
+      });
     }
     var dot = $('.cursor-dot'), ring = $('.cursor-ring'), cur = $('[data-cursor]');
     // set directly on every pointer event (no easing), so it never trails the mouse
@@ -383,7 +399,7 @@
 
       /* Hero photo drifts slower than the page; Why-UK photo parallax. */
       var heroImg = $('[data-hero-img]');
-      if (heroImg) G.fromTo(heroImg, { yPercent: 0 }, { yPercent: -7, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
+      if (heroImg) G.fromTo(heroImg, { yPercent: 0 }, { yPercent: -4, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
       // big screens: the hero content lifts away and fades as the page takes over
       var heroBody = $('[data-hero-body]');
       if (heroBody && big) {

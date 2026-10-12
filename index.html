@@ -12,10 +12,9 @@
 <meta property="og:image" content="./assets/img/hero/oxford-1920.jpg">
 <link rel="icon" href="./assets/img/opt/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="./assets/img/opt/apple-touch-icon.png">
-<link rel="preload" as="image" type="image/webp" href="./assets/img/hero/oxford-1920.webp" imagesrcset="./assets/img/hero/oxford-828.webp 828w, ./assets/img/hero/oxford-1280.webp 1280w, ./assets/img/hero/oxford-1920.webp 1920w, ./assets/img/hero/oxford-2560.webp 2560w" imagesizes="100vw" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" href="./assets/img/hero/oxford-1280.webp" imagesrcset="./assets/img/hero/oxford-828.webp 828w, ./assets/img/hero/oxford-1280.webp 1280w, ./assets/img/hero/oxford-1920.webp 1920w" imagesizes="(max-width: 960px) 80vw, 34vw" fetchpriority="high">
 <link rel="preload" href="./assets/fonts/quicksand-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="./assets/fonts/instrument-serif-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="./assets/fonts/instrument-serif-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="./assets/fonts/plus-jakarta-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="./assets/css/quicksand.css">
 <link rel="stylesheet" href="./assets/vendor/lenis/lenis.css">
 <link rel="stylesheet" href="./assets/css/landing.css">
@@ -120,52 +119,53 @@
 <main>
 
 <!-- ================================================================== HERO -->
-<!-- a tour of the four nations: HD photos (Oxford, Edinburgh, Cardiff, Belfast) crossfade behind the welcome, each slowly pushing in while it is
-     on screen. The tour list (lower right) shows where you are, with a
-     progress bar, and can be clicked. Only the first photo loads up front;
-     landing.js fetches each next one just before it is needed. -->
+<!-- immersive: the HD photo of the current nation fills the screen behind
+     everything (graded deep teal on the left so the copy stays legible); a
+     moving photo capsule sits inline in the headline; on the right a fanned
+     deck of HD photo cards, one per nation, tilts in 3D with the pointer. Every few seconds the front card tucks to the
+     back; the city tabs below show progress and can be clicked. -->
 <section id="home" class="hero" data-section data-tour>
-  <div class="hero-slides" data-hero-img aria-hidden="true">
-    <figure class="hs is-active"><picture><source type="image/webp" srcset="./assets/img/hero/oxford-828.webp 828w, ./assets/img/hero/oxford-1280.webp 1280w, ./assets/img/hero/oxford-1920.webp 1920w, ./assets/img/hero/oxford-2560.webp 2560w" sizes="100vw"><img src="./assets/img/hero/oxford-1920.jpg" alt="" width="1920" height="1069" fetchpriority="high" decoding="async" style="object-position: 50% 42%"></picture></figure>
-    <figure class="hs"><picture><source type="image/webp" data-srcset="./assets/img/hero/edinburgh-828.webp 828w, ./assets/img/hero/edinburgh-1280.webp 1280w, ./assets/img/hero/edinburgh-1920.webp 1920w, ./assets/img/hero/edinburgh-2560.webp 2560w" sizes="100vw"><img alt="" width="1920" height="1277" decoding="async" style="object-position: 30% 40%"></picture></figure>
-    <figure class="hs"><picture><source type="image/webp" data-srcset="./assets/img/hero/cardiff-828.webp 828w, ./assets/img/hero/cardiff-1280.webp 1280w, ./assets/img/hero/cardiff-1920.webp 1920w, ./assets/img/hero/cardiff-2560.webp 2560w" sizes="100vw"><img alt="" width="1920" height="1120" decoding="async" style="object-position: 55% 45%"></picture></figure>
-    <figure class="hs"><picture><source type="image/webp" data-srcset="./assets/img/hero/belfast-828.webp 828w, ./assets/img/hero/belfast-1280.webp 1280w, ./assets/img/hero/belfast-1920.webp 1920w, ./assets/img/hero/belfast-2560.webp 2560w" sizes="100vw"><img alt="" width="1920" height="1280" decoding="async" style="object-position: 50% 50%"></picture></figure>
+  <div class="hero-bg" data-hero-img aria-hidden="true">
+    <img srcset="./assets/img/hero/oxford-1280.webp 1280w, ./assets/img/hero/oxford-1920.webp 1920w, ./assets/img/hero/oxford-2560.webp 2560w" sizes="100vw" src="./assets/img/hero/oxford-1920.webp" alt="" width="1920" height="1080" decoding="async" class="is-active" style="object-position: 50% 40%">
+    <img srcset="./assets/img/hero/edinburgh-1280.webp 1280w, ./assets/img/hero/edinburgh-1920.webp 1920w, ./assets/img/hero/edinburgh-2560.webp 2560w" sizes="100vw" src="./assets/img/hero/edinburgh-1920.webp" alt="" width="1920" height="1080" decoding="async" loading="lazy" style="object-position: 30% 45%">
+    <img srcset="./assets/img/hero/cardiff-1280.webp 1280w, ./assets/img/hero/cardiff-1920.webp 1920w, ./assets/img/hero/cardiff-2560.webp 2560w" sizes="100vw" src="./assets/img/hero/cardiff-1920.webp" alt="" width="1920" height="1080" decoding="async" loading="lazy" style="object-position: 55% 45%">
+    <img srcset="./assets/img/hero/belfast-1280.webp 1280w, ./assets/img/hero/belfast-1920.webp 1920w, ./assets/img/hero/belfast-2560.webp 2560w" sizes="100vw" src="./assets/img/hero/belfast-1920.webp" alt="" width="1920" height="1080" decoding="async" loading="lazy" style="object-position: 50% 50%">
   </div>
   <div class="hero-shade" aria-hidden="true"></div>
-
   <div class="wrap hero-inner" data-hero-body>
     <div class="hero-copy">
-      <p class="hero-index" data-hero-in><span>Welcome</span> Tutee Connect, UK education experts</p>
-      <h1 class="hero-title" data-hero-title>Your route map to the <em>UK&nbsp;dream.</em></h1>
-      <p class="hero-sub" data-blur-in>We don't just facilitate UK Student Visas; we transform lives. Join the preferred choice for those seeking excellence in United Kingdom higher education.</p>
+      <p class="hero-eyebrow" data-hero-in><span class="dot"></span>UK education experts<span class="hero-eyebrow-more"><i aria-hidden="true"></i> Counsellors online now</span></p>
+      <h1 class="hero-title"><span data-hero-title>Your route map to the</span> <span class="hero-cap" aria-hidden="true"><img src="./assets/img/hero/oxford-828.webp" alt="" width="828" height="500" class="is-active" style="object-position: 50% 40%"><img src="./assets/img/hero/edinburgh-828.webp" alt="" width="828" height="500" loading="lazy" style="object-position: 28% 50%"><img src="./assets/img/hero/cardiff-828.webp" alt="" width="828" height="500" loading="lazy" style="object-position: 52% 45%"><img src="./assets/img/hero/belfast-828.webp" alt="" width="828" height="500" loading="lazy" style="object-position: 45% 50%"></span> <span class="hl" data-hero-title>UK dream.</span></h1>
+      <p class="hero-sub" data-hero-in>From your first university shortlist to your Student visa, the Graduate Route and settlement, one expert team guides every step.</p>
       <div class="hero-actions" data-hero-in>
         <a class="hero-cta" href="#contact" data-goto data-intent="Career Consultation" data-magnet><span>Book a free consultation</span><svg class="icon icon-sm"><use href="#i-arrow"/></svg></a>
-        <a class="hero-ghost" href="#welcome"><span>Explore your journey</span><svg class="icon icon-sm"><use href="#i-down"/></svg></a>
+        <a class="hero-ghost" href="#journey"><span>How it works</span><svg class="icon icon-sm"><use href="#i-down"/></svg></a>
       </div>
-    </div>
-
-    <div class="hero-tour" data-hero-in>
-      <p class="hero-tour-label">Study across all four nations</p>
-      <ol class="hero-tour-list">
-        <li class="is-active"><button type="button" data-go="0"><span class="ht-n">01</span><span class="ht-t"><b>Oxford</b><small>England</small></span><i class="ht-bar"></i></button></li>
-        <li><button type="button" data-go="1"><span class="ht-n">02</span><span class="ht-t"><b>Edinburgh</b><small>Scotland</small></span><i class="ht-bar"></i></button></li>
-        <li><button type="button" data-go="2"><span class="ht-n">03</span><span class="ht-t"><b>Cardiff</b><small>Wales</small></span><i class="ht-bar"></i></button></li>
-        <li><button type="button" data-go="3"><span class="ht-n">04</span><span class="ht-t"><b>Belfast</b><small>Northern Ireland</small></span><i class="ht-bar"></i></button></li>
-      </ol>
-    </div>
-
-    <div class="hero-rail" data-hero-in>
-      <ul class="hero-stats">
-        <li><b><span data-count="99">99</span>%</b><span>Visa success rate</span></li>
-        <li><b><span data-count="200">200</span>+</b><span>UK university tie-ups</span></li>
-        <li><b><span data-count="5">5</span>k+</b><span>Students guided</span></li>
-        <li><b><span data-count="4">4</span></b><span>Nations to study in</span></li>
+      <ul class="hero-facts" data-hero-in>
+        <li><b>99%</b><span>Visa success rate</span></li>
+        <li><b>200+</b><span>UK university tie-ups</span></li>
+        <li><b>5k+</b><span>Students guided</span></li>
       </ul>
-      <a class="hero-scroll" href="#welcome"><span>Scroll</span><i aria-hidden="true"></i></a>
+    </div>
+
+    <div class="hero-visual" data-hero-in>
+      <div class="deck" data-deck>
+        <figure class="dc" data-d="0"><img srcset="./assets/img/hero/oxford-828.webp 828w, ./assets/img/hero/oxford-1280.webp 1280w, ./assets/img/hero/oxford-1920.webp 1920w" sizes="(max-width: 960px) 80vw, 34vw" src="./assets/img/hero/oxford-1280.webp" alt="Oxford, England" width="1280" height="900" decoding="async" fetchpriority="high" style="object-position: 50% 40%"><figcaption><span class="dc-n">01</span><b>Oxford</b><small>England</small></figcaption></figure>
+        <figure class="dc" data-d="1"><img srcset="./assets/img/hero/edinburgh-828.webp 828w, ./assets/img/hero/edinburgh-1280.webp 1280w, ./assets/img/hero/edinburgh-1920.webp 1920w" sizes="(max-width: 960px) 80vw, 34vw" src="./assets/img/hero/edinburgh-1280.webp" alt="Edinburgh, Scotland" width="1280" height="900" decoding="async" style="object-position: 28% 50%"><figcaption><span class="dc-n">02</span><b>Edinburgh</b><small>Scotland</small></figcaption></figure>
+        <figure class="dc" data-d="2"><img srcset="./assets/img/hero/cardiff-828.webp 828w, ./assets/img/hero/cardiff-1280.webp 1280w, ./assets/img/hero/cardiff-1920.webp 1920w" sizes="(max-width: 960px) 80vw, 34vw" src="./assets/img/hero/cardiff-1280.webp" alt="Cardiff, Wales" width="1280" height="900" decoding="async" style="object-position: 52% 45%"><figcaption><span class="dc-n">03</span><b>Cardiff</b><small>Wales</small></figcaption></figure>
+        <figure class="dc" data-d="3"><img srcset="./assets/img/hero/belfast-828.webp 828w, ./assets/img/hero/belfast-1280.webp 1280w, ./assets/img/hero/belfast-1920.webp 1920w" sizes="(max-width: 960px) 80vw, 34vw" src="./assets/img/hero/belfast-1280.webp" alt="Belfast, Northern Ireland" width="1280" height="900" decoding="async" style="object-position: 45% 50%"><figcaption><span class="dc-n">04</span><b>Belfast</b><small>Northern Ireland</small></figcaption></figure>
+      </div>
+      <nav class="hero-tour" aria-label="Study across the four UK nations">
+        <ol class="hero-tour-list">
+          <li class="is-active"><button type="button" data-go="0">Oxford<i class="ht-bar"></i></button></li>
+          <li><button type="button" data-go="1">Edinburgh<i class="ht-bar"></i></button></li>
+          <li><button type="button" data-go="2">Cardiff<i class="ht-bar"></i></button></li>
+          <li><button type="button" data-go="3">Belfast<i class="ht-bar"></i></button></li>
+        </ol>
+        <p class="hero-credit" data-hero-credit>Photo: Julian Herzog, CC BY 4.0</p>
+      </nav>
     </div>
   </div>
-
-  <p class="hero-credit" data-hero-credit>Photo: Julian Herzog, CC BY 4.0</p>
   <template data-credits>Photo: Julian Herzog, CC BY 4.0|Photo: Saffron Blaze, CC BY-SA 3.0|Photo: Ввласенко, CC BY 4.0|Photo: Suicasmo, CC BY-SA 4.0</template>
 </section>
 
