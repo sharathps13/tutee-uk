@@ -955,6 +955,13 @@ html:not(.js) [data-wiz-next], html:not(.js) [data-wiz-back], html:not(.js) .wiz
 .dir-sort .dd-btn { height: 38px; padding: 0 34px 0 14px; border-radius: 999px; border-width: 1.5px; background: #fff; font-size: 14px; font-weight: 700; }
 .dir-sort .dd-chev { right: 11px; }
 
+/* chat answer actions ("Show me", "Open details", "Message an advisor") */
+.msg-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.msg-act { display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line); background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; transition: border-color .2s, background-color .2s, color .2s; }
+.msg-act:hover { border-color: var(--maroon); color: var(--maroon); }
+.msg-act.hot { background: var(--maroon); border-color: var(--maroon); color: #fff; }
+.msg-act.hot:hover { background: var(--night); border-color: var(--night); color: #fff; }
+
 /* ============================================== UNIVERSITY DETAILS SHEET */
 .uni-sheet { position: fixed; inset: 0; z-index: 450; }
 .uni-sheet[hidden] { display: none; }

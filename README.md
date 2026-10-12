@@ -111,6 +111,17 @@ form as the value, so validation and submission are unchanged. Add `data-native`
 Global: Lenis smooth scroll, scroll progress bar, *ClickSpark* bursts, custom cursor
 (fine pointers only), circular-reveal menu, back-to-top ring, mobile sticky CTA, WhatsApp,
 Tutee AI chat.
+
+**Tutee AI** (`initChat()` in `landing.js`) answers from this page's own content and never asks
+for personal details. It tries, in order: a named university or "universities in <place>" /
+"best for <subject>" (same data as the map and directory; the full 499 on universities.html);
+curated answers (`KB`), each written from the page copy and tied to its section for a "Show me"
+button; then a search of the page text itself (FAQs, service details, steps, cards). When a
+question asks for figures the page deliberately leaves out (fees, scores, deadlines, work hours)
+it answers what the page says and adds that an advisor confirms the exact details. Only when
+nothing on the page matches does it suggest messaging an advisor or booking the free
+consultation. **When you change page copy, update the matching `KB` entry too.** For testing,
+`TC_ask('question')` in the console returns the answer it would give.
 The UK map outline is drawn from approximate coastline coordinates in `landing.js` (`GB`, `NI`)
 — stylised, not survey-accurate.
 
@@ -159,7 +170,7 @@ React's interactivity was reimplemented in `assets/js/main.js`. Elements are add
 | Universities / testimonials carousels | mobile snap scroll, dots synced by observer (threshold 0.6, 50 ms debounce) |
 | FAQ | single-open accordion, separate desktop and mobile presentations |
 | Lead forms | POST to our own `/api/enquiry` serverless function, which emails business@tuteeconnect.com; email + phone validation, success/error states |
-| AI counsellor panel | scripted replies, lead capture (name → phone → email), submits to `/api/enquiry` |
+| AI counsellor panel | (old build — replaced by the page-grounded Tutee AI described above; no lead capture) |
 | Directory | live search, load-more in 20s, multi-select, sticky selection bar, application modal |
 | Marquee / float / ping / bounce | pure CSS, unchanged from the reference |
 

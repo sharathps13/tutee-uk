@@ -818,7 +818,7 @@
 <aside class="chat" id="chat" data-chat aria-label="Tutee AI counsellor" aria-hidden="true">
   <div class="chat-head">
     <span class="av"><img src="./assets/img/opt/icon-96.png" alt="" width="28" height="28"></span>
-    <div><h3>Tutee AI</h3><small>Expert Counsellor • Online</small></div>
+    <div><h3>Tutee AI</h3><small>Ask anything about this page</small></div>
     <div class="chat-tools">
       <button type="button" aria-label="Restart conversation" data-chat-reset><svg class="icon icon-sm"><use href="#i-refresh"/></svg></button>
       <button type="button" aria-label="Close chat" data-chat-close><svg class="icon icon-sm"><use href="#i-x"/></svg></button>
@@ -827,10 +827,11 @@
   <div class="chat-cta"><span>Free Consultation Available</span><button type="button" data-chat-contact>Book Now</button></div>
   <div class="chat-list" data-chat-list aria-live="polite" data-lenis-prevent>
     <div class="chat-chips" data-chat-chips>
-      <button type="button">How to get a UK Student Visa?</button>
-      <button type="button">Tell me about Scholarships</button>
-      <button type="button">Can I work while studying?</button>
-      <button type="button" class="hot">Evaluate My Profile</button>
+      <button type="button">How does the Student visa work?</button>
+      <button type="button">Can my family come with me?</button>
+      <button type="button">What scholarships can I get?</button>
+      <button type="button">Which universities are in London?</button>
+      <button type="button" class="hot" data-chat-book>Book a free consultation</button>
     </div>
     <div class="typing" data-chat-typing aria-label="Tutee AI is typing"><span></span><span></span><span></span></div>
   </div>
@@ -839,7 +840,7 @@
     <textarea id="chat-input" rows="1" placeholder="Ask me anything..." data-chat-input></textarea>
     <button type="submit" aria-label="Send" data-chat-send disabled><svg class="icon icon-sm"><use href="#i-send"/></svg></button>
   </form>
-  <p class="chat-fine">AI generated responses. Confirm essential info with our team.</p>
+  <p class="chat-fine">Answers come from this page. For anything else, our advisors are a message away.</p>
 </aside>
 
 <script src="./assets/vendor/gsap/gsap.min.js" defer></script>

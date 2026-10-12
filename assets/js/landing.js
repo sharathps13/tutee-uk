@@ -1220,79 +1220,395 @@
   }
 
   /* ================================================================= *
-   * Tutee AI — scripted counsellor with lead capture.
+   * Tutee AI — answers questions from this page's own content.
+   *
+   *  1. KB: curated answers written from the page copy (each with the
+   *     section it comes from, so "Show me" can scroll there).
+   *  2. Universities: names and cities are looked up in the same data the
+   *     map / directory use.
+   *  3. Page search: anything else is matched against the page text itself
+   *     (FAQs, service details, steps, cards…), and the most relevant
+   *     sentences are quoted.
+   *  Only when none of these finds the answer does it point to an advisor;
+   *  when a question asks for figures the page deliberately leaves out
+   *  (fees, scores, deadlines…) it answers what the page says and adds that
+   *  an advisor confirms the exact details. It never asks for personal data.
    * ================================================================= */
-  var WELCOME = "Hi! 👋 I'm your **Tutee Connect AI Counsellor**.\n\nI can answer questions about UK Student Visas, top UK universities, and our 99% success rate programmes. How can I help you today?";
-  function reply(text) {
-    var q = text.toLowerCase();
-    if (/visa|student route|interview|refus/.test(q)) return 'The UK Student visa (the Student Route) is for international students studying in Britain. The great news is Tutee Connect boasts a **99% UK Student Visa Success Rate**! We provide expert mock credibility interviews and rigorous documentation support so you are fully prepared.';
-    if (/scholarship|fund|financial|aid|bursar/.test(q)) return 'Many top UK universities offer generous merit-based scholarships and international bursaries. We analyse your academic profile and help you apply to universities where you have the highest chance of securing funding.';
-    if (/cost|fee|tuition|money|expense|price|budget/.test(q)) return 'Costs depend on the university, course and city, so our counsellors prepare a **personalised plan** for you during your free evaluation — including **non-collateral education loan** options and part-time work.';
-    if (/job|work|earn|part.?time|graduate route/.test(q)) return "Absolutely! On a UK Student visa you can work up to **20 hours a week during term time** and full time in the holidays. After you graduate, the **Graduate Route** lets you stay and work for two years (three after a PhD). Our team also guides students on finding permitted part-time work after they arrive.";
-    if (/ielts|pte|duolingo|gmat|exam|english/.test(q)) return 'Most universities ask for an English language test — **IELTS, PTE Academic or the Duolingo English Test** — and some postgraduate courses such as MBAs also ask for a GMAT score. We can help you shortlist universities that perfectly match your current scores.';
-    if (/tutee|connect|service|help/.test(q)) return 'Tutee Connect provides end-to-end support for UK admissions! From university shortlisting and applications, to visa credibility interview prep, education loans, and post-landing settlement. We are your one-stop solution.';
-    return "That's a great question! Studying in the UK involves a lot of moving parts (admissions, CAS, visas, loans), and our experts at Tutee Connect are dedicated to navigating every single detail with you.";
+  var WA_URL = 'https://wa.me/917358364959';
+  var WELCOME = "Hi! 👋 I'm **Tutee AI**.\n\nAsk me anything about this page — studying in the UK, the Student visa, the Graduate Route, scholarships and loans, universities, bringing your family, or how Tutee Connect helps.";
+  var STOP = ('a an the and or but if of to in on at for with by from is are was were be been am do does did can could would should will shall may might ' +
+    'i me my we our you your it its this that these those there here what which who whom how when where whats hows tell about please ' +
+    'get got give know want need like also just any some more most much many very really uk tutee connect').split(' ');
+  var STOPSET = {}; STOP.forEach(function (w) { STOPSET[w] = 1; });
+  // words people use for the same thing on the page
+  var SYN = {
+    fee: 'cost', fees: 'cost', price: 'cost', expensive: 'cost', afford: 'cost', budget: 'cost', tuition: 'cost tuition', money: 'cost', charges: 'cost', charge: 'cost',
+    psw: 'graduate route', poststudy: 'graduate route', 'post-study': 'graduate route', postwork: 'graduate route',
+    pr: 'settlement ilr', ilr: 'settlement ilr', permanent: 'settlement', residency: 'settlement', citizenship: 'settlement',
+    wife: 'family dependant partner', husband: 'family dependant partner', spouse: 'family dependant partner', partner: 'family dependant partner', kids: 'family dependant children', children: 'family dependant children', child: 'family dependant children', dependent: 'dependant family', dependents: 'dependant family', dependants: 'dependant family',
+    job: 'work', jobs: 'work', employment: 'work', working: 'work', parttime: 'part-time work',
+    ielts: 'english test ielts', pte: 'english test pte', toefl: 'english test', duolingo: 'english test', languagecert: 'english test languagecert', english: 'english test',
+    sop: 'personal statement', lor: 'references', statement: 'personal statement',
+    loan: 'loan', loans: 'loan', bank: 'loan', finance: 'loan funding', financing: 'loan funding', collateral: 'loan collateral',
+    scholarship: 'scholarship', scholarships: 'scholarship', grant: 'scholarship grant', grants: 'scholarship grant', bursary: 'scholarship bursary', bursaries: 'scholarship bursary', waiver: 'scholarship',
+    hostel: 'accommodation', housing: 'accommodation', stay: 'accommodation', rent: 'accommodation',
+    phone: 'contact', number: 'contact', call: 'contact', email: 'contact', mail: 'contact', whatsapp: 'contact', reach: 'contact',
+    masters: 'master', msc: 'master', ma: 'master', mres: 'research phd', doctorate: 'phd', bachelors: 'undergraduate', ug: 'undergraduate', pg: 'postgraduate',
+    refused: 'refusal', rejected: 'refusal', rejection: 'refusal', denied: 'refusal'
+  };
+  function stem(w) { return w.length > 4 ? w.replace(/(ings|ing|ies|es|s)$/, function (m) { return m === 'ies' ? 'y' : ''; }) : w; }
+  function tokens(text) {
+    var out = [];
+    String(text).toLowerCase().replace(/[’']/g, '').replace(/part-time/g, 'parttime').replace(/[^a-z0-9+ ]+/g, ' ').split(/\s+/).forEach(function (w) {
+      if (!w || STOPSET[w]) return;
+      var sw = SYN[w] || SYN[stem(w)];
+      (sw ? (w + ' ' + sw) : w).split(' ').forEach(function (x) { if (x && !STOPSET[x]) { x = stem(x); if (out.indexOf(x) === -1) out.push(x); } });
+    });
+    return out;
   }
-  function md(s) { return esc(s).split(/\n{2,}/).map(function (p) { return '<p>' + p.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>') + '</p>'; }).join(''); }
+
+  // ---- 1. curated answers (wording taken from the page) -------------------
+  var KB = [
+    { id: 'shortlist', k: 'shortlist shortlisted heart save compare favourite', sec: '#universities',
+      a: 'Tap a city on the map (or open the universities page), open any university to see its details, and tap the **heart** to shortlist it. Then choose **Apply with my shortlist** — your shortlist follows you to the free consultation form and is sent with your enquiry, so your counsellor can check your chances for each one.' },
+    { id: 'career', k: 'career consultation counselling counseling guidance pathway pathways', sec: '#services',
+      a: 'Our **Career Consultation is free of cost**. It builds your self-awareness about your profile and shows the pathways for career advancement in the UK, and our consultants stay with you through each phase of the application. We also brief you on the UK — one-year Master\'s degrees, the two-year Graduate Route and the pathway onward to the Skilled Worker visa and settlement.' },
+    { id: 'select', k: 'choose select selection pick suit suitable match course courses college', sec: '#services',
+      a: 'Our **College Selection** service: based on your interests and previous academics, our process experts suggest the most suitable **courses and universities** across England, Scotland, Wales and Northern Ireland, from 200+ institutions in our network.\n\nWe explain module structures, credit requirements, placement years and post-graduation scope, so you can make the right decision.' },
+    { id: 'services', k: 'services service offer offering provide what-we-do end-to-end', sec: '#services',
+      a: 'Tutee Connect offers **nine services**, end to end:\n• Career Consultation (the first consultation is free)\n• Language Test — IELTS, PTE and LanguageCert prep\n• College Selection from 200+ UK institutions\n• Documentation — Personal Statements, references, transcripts\n• Student Visa & credibility-interview prep\n• E2E Settlement — Graduate Route, Skilled Worker, ILR\n• Financial Aid — loans and UK scholarships\n• Post-Landing support\n• Family Migration' },
+    { id: 'consult', k: 'consultation free evaluation profile assess eligible eligibility book appointment counsellor advisor route map apply start', sec: '#contact', form: true,
+      a: 'Your **free consultation** includes:\n• **Profile evaluation** — your marks, tests and goals, checked the way UKVI officers look at them\n• **University shortlist** — courses that fit your profile, from our 200+ UK tie-ups\n• **Visa route map** — every step from your CAS to the credibility interview\n• **Funding options** — scholarships, bursaries and education-loan partners\n\nIt\'s free with no obligation — the form takes under a minute.' },
+    { id: 'require', k: 'requirement requirements documents need eligible eligibility admission criteria passport transcripts apply application qualify', sec: '#faq',
+      a: 'Generally you need a **valid passport**, strong **academic transcripts**, proof of **English language proficiency** (IELTS, PTE or an accepted equivalent), **academic references** and a compelling **Personal Statement**. Some postgraduate courses — MBAs in particular — may also ask for a **GMAT** score or work experience.' },
+    { id: 'visa', k: 'visa student-visa student cas biometrics credibility interview ukvi immigration health surcharge', sec: '#faq',
+      a: 'Once you accept an offer, your university issues a **CAS** (Confirmation of Acceptance for Studies). You then apply online for the **Student visa**, pay the visa fee and the Immigration Health Surcharge, show the required funds, and attend a **biometrics** appointment — plus a **credibility interview** if one is requested.\n\nWe guide every step, including one-on-one **mock interviews**, and have a **99% UK Student visa success rate**.' },
+    { id: 'refusal', k: 'refusal refused previous reject complicated difficult gap backlog low marks', sec: '#testimonials',
+      a: 'Yes — we have successfully managed many **complicated cases**. Every document is reviewed multiple times before submission, and one-on-one **mock credibility interviews** help you explain your goals clearly to UKVI officers. One of our students, Sneha, had a previous visa refusal; her coordinator turned it around and guided her through the whole documentation process successfully.' },
+    { id: 'success', k: 'success rate 99 percent record result track approval chances', sec: '#welcome',
+      a: 'Tutee Connect has a **99% UK Student visa success rate**, **200+ UK university tie-ups** and has guided **5,000+ students**. We scrutinise every profile from the view of UKVI officers to choose the right pathway.' },
+    { id: 'graduate', k: 'graduate route after graduation graduating post-study stay two years psw', sec: '#relocate',
+      a: 'The **Graduate Route** lets you stay and work — or look for work — in the UK for **two years** after your degree (**three years after a PhD**). No sponsor is required, which makes it the ideal bridge into a **Skilled Worker visa**.' },
+    { id: 'settle', k: 'settlement settle ilr indefinite leave remain permanent skilled worker long term career pathway', sec: '#relocate',
+      a: 'The pathway to settling in the UK has four steps:\n1. **UK Student Visa** — complete your programme (we help you choose courses that lead into the Graduate Route)\n2. **Graduate Route** — two years to work after graduation (three after a PhD), no sponsor\n3. **Skilled Worker visa** — employer-sponsored, for long-term work\n4. **Indefinite Leave to Remain** — after five continuous years on a qualifying work visa' },
+    { id: 'family', k: 'family dependant partner children bring relocate spouse together mres phd research', sec: '#relocate',
+      a: 'We help **MRes and PhD students** relocate to the UK with their families. Since January 2024 only students on **postgraduate research** courses (PhD or equivalent) or **government-sponsored** courses can bring dependants — a partner and children under 18 — on a Student visa.\n\nOnce you move onto the Graduate Route and then a **Skilled Worker visa**, your partner and children can join you, and Skilled Worker dependants have **full work rights**. We prepare the dependant visa applications, documents and interview prep.' },
+    { id: 'loan', k: 'loan collateral non-collateral bank banks funding finance lender lenders partners emi', sec: '#financial-aid',
+      a: 'We have exclusive tie-ups with reputed national banks and private finance sectors, offering both **collateral and non-collateral education loans**. Loans can cover **tuition fees, accommodation and living expenses**.\n\nLending partners on the page include ICICI Bank, HDFC Credila, IDFC First Bank, InCred, Auxilo, Avanse, Union Bank, Prodigy Finance, Axis Bank and MPOWER Financing — and many more.' },
+    { id: 'scholar', k: 'scholarship grant bursary merit waiver funding aid', sec: '#scholarships',
+      a: 'We identify and secure international student **scholarships, departmental grants and bursaries**:\n• **Merit-based scholarships** directly from prestigious UK universities, for strong academic profiles\n• **Full & partial grants** — institutional bursaries and department-specific scholarships that can cover part or all of your tuition\n• **Application support** — winning scholarship essays and the supplementary documents for financial aid' },
+    { id: 'cost', k: 'cost tuition living expense afford budget cheap', sec: '#contact', form: true, specific: true,
+      a: 'This page doesn\'t list costs — they depend on the university, course and city, so your counsellor prepares a **personalised plan** during your free consultation.\n\nWhat the page does cover: **scholarships and grants** (which can cover part or all of tuition) and **collateral and non-collateral education loans** that cover tuition, accommodation and living expenses.' },
+    { id: 'english', k: 'english test ielts pte languagecert selt toefl duolingo language exam gmat score band', sec: '#services',
+      a: 'We prepare you for the UK English tests — **IELTS for UKVI**, **PTE Academic UKVI** and **LanguageCert Academic SELT** — plus admission tests such as the **GMAT** where a course needs one. That includes expert training, **free study materials** and several **mock tests**, and we then book your official UKVI-approved SELT.' },
+    { id: 'docs', k: 'personal statement documents documentation references lor sop transcripts essay', sec: '#services',
+      a: 'We share samples, clear requirements and the formatting for every crucial document — **Personal Statement, academic references and transcripts** — and review everything **multiple times** at the pre-apply stage, so nothing holds up your university or visa application.' },
+    { id: 'accom', k: 'accommodation housing pre-departure briefing arrive arrival land landing post-landing gp national insurance brp evisa', sec: '#faq',
+      a: 'Yes. We partner with top student housing providers to secure safe, comfortable accommodation near your campus, and run **pre-departure briefings** on UK culture, academic expectations, packing and immigration.\n\nAfter you land, your consultant helps with **accommodation, your eVisa/BRP, GP registration (NHS), National Insurance number, a UK bank account** and finding permitted **part-time work**.' },
+    { id: 'work', k: 'work part-time job while studying earn hours', sec: '#journey', specific: true,
+      a: 'After you land, our **post-landing support** helps you find **permitted term-time part-time work** (it\'s part of step 6 of your journey). After graduation, the **Graduate Route** gives you two years to work in the UK (three after a PhD), with no sponsor needed.\n\nThe exact weekly hours you may work aren\'t listed on this page — they depend on your visa conditions, so an advisor confirms them for your case.' },
+    { id: 'journey', k: 'journey steps stages timeline step roadmap', sec: '#journey',
+      a: 'Your UK journey in 8 steps:\n**Before you fly** — 1. Free profile evaluation · 2. English test · 3. University offer · 4. Documents & CAS · 5. Student visa\n**When you land** — 6. Accommodation, eVisa, GP, NI number, bank account and part-time work\n**After graduation** — 7. Graduate Route · 8. Settlement (Skilled Worker, then ILR, with your family alongside you)' },
+    { id: 'whyuk', k: 'why britain study united kingdom benefit benefits advantage advantages', sec: '#why-uk',
+      a: 'Why the UK:\n• **One-year Master\'s degrees** — finish faster than most countries\n• **Two-year Graduate Route** work visa after you graduate (three after a PhD)\n• **4 nations** to choose from — England, Scotland, Wales and Northern Ireland\n• World\'s best universities, a distinctive and diverse curriculum, and a high level of practical instruction' },
+    { id: 'master', k: 'master duration one year 1 long length postgraduate', sec: '#why-uk', specific: true,
+      a: 'UK **Master\'s degrees are typically one year** — you finish faster than in most countries — and the two-year Graduate Route follows. UK MBAs are listed as an option too, and some ask for work experience or a GMAT.' },
+    { id: 'unis', k: 'university universities college institutions top ranked list tie-ups', sec: '#universities',
+      a: 'We have **200+ UK university tie-ups**. On the map you can explore top-ranked universities in London, Oxford, Cambridge, Edinburgh, Manchester, Coventry, Bristol, Glasgow and Durham, and the universities page lists **all 499 UK institutions** (24 in the Russell Group) with search and filters.\n\nOpen any university for its details, heart it to shortlist, then apply for a free consultation with your shortlist attached.' },
+    { id: 'russell', k: 'russell group', sec: '#universities',
+      a: 'The **Russell Group** is a group of **24 leading research-intensive UK universities**. All the top-ranked universities on our map — Oxford, Cambridge, Imperial, UCL, LSE, Edinburgh, King\'s, Manchester, Bristol, Warwick, Glasgow and Durham — are Russell Group members.' },
+    { id: 'intake', k: 'intake january september when start deadline semester session', sec: '#home', specific: true,
+      a: 'You can plan for a **January 2027**, **September 2027** or **2028-or-later** start (or "not sure yet") — pick it in the "Plan your UK journey" bar. Application deadlines differ by university and course, so your counsellor confirms the exact dates for your intake.' },
+    { id: 'levels', k: 'undergraduate bachelor postgraduate master mba phd research level course', sec: '#home',
+      a: 'We guide students for **Undergraduate**, **Master\'s**, **MBA** and **PhD / research** study. Choose your level in the "Plan your UK journey" bar and it\'s carried into your free consultation.' },
+    { id: 'contact', k: 'contact phone number call email whatsapp website talk speak reach advisor human office', sec: '.site-footer',
+      a: 'You can reach Tutee Connect on:\n• **Call / WhatsApp:** +91 73583 64959\n• **Email:** info@tuteeconnect.com\n• **Website:** www.tuteeconnect.com\n\nWe reply within one working day.' },
+    { id: 'office', k: 'office address location visit branch located headquarters walk', sec: '.site-footer',
+      a: 'The office address isn\'t listed on this page. Call or WhatsApp **+91 73583 64959** or email **info@tuteeconnect.com** and an advisor will share it — or book a free consultation and we\'ll arrange a meeting.' },
+    { id: 'about', k: 'tutee connect company who are you about experience students guided trust', sec: '#welcome',
+      a: '**Tutee Connect** gives study-abroad and immigration advice for students who want to study, work and settle overseas. For the UK: a **99% Student visa success rate**, **200+ UK university tie-ups** and **5,000+ students guided** — one expert team from your first consultation to settlement.' },
+    { id: 'reviews', k: 'review reviews testimonial stories feedback experience students say genuine', sec: '#testimonials',
+      a: 'A few things our students say:\n• Priya K. (Master\'s, London): her Student visa was approved on the first attempt after credibility-interview prep.\n• Vishal M. (Manchester): the post-landing support for accommodation was "a lifesaver".\n• Rahul V. (Leeds): the non-collateral loan help connected him directly with banking partners.\n• Siddharth J. (PhD, Sheffield): profile building helped him secure a full tuition waiver.' },
+    { id: 'dest', k: 'other countries destinations usa canada australia ireland germany singapore abroad', sec: '.site-footer',
+      a: 'Besides the UK, Tutee Connect covers **Singapore, the USA, Canada, Australia, New Zealand, Ireland, Germany, France, Finland, Poland, Malaysia, the UAE and Mauritius** — see "Destinations" at the bottom of the page.' }
+  ];
+  // questions that ask for figures this page deliberately leaves out
+  var SPECIFIC = /\b(how much|cost|fees?|price|amount|charges?|salary|stipend|band|score|marks? required|minimum|cut.?off|deadline|last date|how many hours|hours per week|percentage|gpa|cgpa|interest rate)\b/i;
+  var ADVISOR_NOTE = 'For the exact figures for your case, an advisor can confirm them in your free consultation.';
+
+  function kbIndex() {
+    KB.forEach(function (e) { e._k = tokens(e.k); e._t = tokens(e.a); });
+  }
+  function scoreKB(qt) {
+    return KB.map(function (e) {
+      var s = 0;
+      qt.forEach(function (t) { if (e._k.indexOf(t) !== -1) s += WEAK[t] ? 1 : 2; else if (e._t.indexOf(t) !== -1) s += 0.5; });
+      return { e: e, s: s };
+    }).sort(function (a, b) { return b.s - a.s; });
+  }
+
+  // ---- 2. universities ----------------------------------------------------
+  var GENERIC = { university: 1, univ: 1, of: 1, the: 1, college: 1, and: 1, school: 1, institute: 1, london: 1, for: 1, at: 1, arts: 1, uk: 1, royal: 1, city: 1, science: 1, technology: 1 };
+  var ALIAS = { lse: 'London School of Economics and Political Science', 'london school of economics': 'London School of Economics and Political Science', ucl: 'University College London', 'university college london': 'University College London', kcl: "King's College London", kings: "King's College London", 'kings college': "King's College London", imperial: 'Imperial College London' };
+  // names whose only distinctive word is an ordinary word ('University of Law') must be typed in full
+  var COMMON = { law: 1, open: 1, west: 1, east: 1, north: 1, south: 1, central: 1, creative: 1, music: 1, design: 1, business: 1, sport: 1, film: 1, art: 1, drama: 1, health: 1, agriculture: 1, english: 1, global: 1, international: 1, new: 1, metropolitan: 1, buckingham: 0 };
+  function uniData() {
+    if (window.UK_UNIVERSITIES && window.UK_UNIVERSITIES.length) return window.UK_UNIVERSITIES;
+    var out = [];
+    CITIES.forEach(function (c) { c.unis.forEach(function (u) { out.push(uniInfo(u)); }); });
+    return out;
+  }
+  function findUni(q) {
+    var low = ' ' + q.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ') + ' ', data = uniData(), best = null, bestLen = 0;
+    Object.keys(ALIAS).forEach(function (a) { if (low.indexOf(' ' + a + ' ') !== -1) { var u = data.filter(function (x) { return x.name === ALIAS[a]; })[0]; if (u && 99 > bestLen) { best = u; bestLen = 99; } } });
+    if (best) return best;
+    data.forEach(function (u) {
+      var words = u.name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(function (w) { return w.length > 2 && !GENERIC[w]; });
+      var full = u.name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!words.length) { if (low.indexOf(' ' + full + ' ') !== -1 && full.length > bestLen) { best = u; bestLen = full.length; } return; }
+      if (words.length === 1 && COMMON[words[0]] && low.indexOf(' ' + full + ' ') === -1) return;
+      var all = words.every(function (w) { return low.indexOf(' ' + w + ' ') !== -1; });
+      var len = words.join(' ').length;
+      if (all && len > bestLen) { best = u; bestLen = len; }
+    });
+    return best;
+  }
+  var PLACES = ['london', 'oxford', 'cambridge', 'edinburgh', 'manchester', 'coventry', 'bristol', 'glasgow', 'durham', 'birmingham', 'leeds', 'sheffield', 'liverpool', 'nottingham', 'cardiff', 'belfast', 'newcastle', 'aberdeen', 'dundee', 'southampton', 'york', 'bath', 'exeter', 'leicester', 'scotland', 'wales', 'england', 'northern ireland'];
+  function findPlace(q) {
+    var low = q.toLowerCase();
+    for (var i = PLACES.length - 1; i >= 0; i--) if (new RegExp('\\b' + PLACES[i] + '\\b').test(low)) return PLACES[i];
+    return null;
+  }
+  function unisIn(place) {
+    var p = place.toLowerCase();
+    return uniData().filter(function (u) {
+      var parts = String(u.location || '').toLowerCase().split(',').map(function (x) { return x.trim(); });
+      return parts.indexOf(p) !== -1;
+    }).sort(function (a, b) { return (a.ranked ? a.rank : 1e9) - (b.ranked ? b.rank : 1e9); });
+  }
+  function uniAnswer(u) {
+    var parts = String(u.location || '').split(',');
+    var lines = ['**' + u.name + '**' + (u.location ? ' — ' + u.location : '')];
+    if (u.ranked) lines.push('• Ranked **#' + u.rank + ' in the UK** (a general blend of widely used league tables)');
+    if (u.type) lines.push('• Type: ' + (TYPE_INFO[u.type] || u.type));
+    if (u.programs) lines.push('• Known for: ' + u.programs);
+    lines.push('\nWe help with course and entry-requirement checks, your Personal Statement and documents, scholarships and loans, and your CAS and Student visa. Exact entry requirements depend on the course — an advisor confirms them for your profile.');
+    return { text: lines.join('\n'), uni: u, city: parts[0] };
+  }
+
+  // subjects come from the universities' "known for" lists
+  var subjects = null;
+  function findSubject(q) {
+    if (!/\b(univ\w*|colleges?|best|top|good|study|studying|where|which|known)\b/i.test(q)) return null;
+    if (!subjects) {
+      var seen = {};
+      uniData().forEach(function (u) { String(u.programs || '').split(',').forEach(function (p) { p = p.trim().toLowerCase(); if (p.length > 2) seen[p] = 1; }); });
+      subjects = Object.keys(seen).sort(function (a, b) { return b.length - a.length; });
+    }
+    var low = ' ' + q.toLowerCase().replace(/[^a-z ]+/g, ' ') + ' ';
+    for (var i = 0; i < subjects.length; i++) if (low.indexOf(' ' + subjects[i] + ' ') !== -1) return subjects[i];
+    return null;
+  }
+
+  // generic words that alone don't identify a topic
+  var WEAK = {}; ['offer', 'provide', 'service', 'help', 'support', 'available', 'apply', 'start', 'list', 'top', 'process', 'student', 'study', 'course', 'college', 'university', 'universiti', 'good', 'best', 'free'].forEach(function (w) { WEAK[stem(w)] = 1; });
+  var vocabCache = null;
+  function pageVocab() {
+    if (vocabCache) return vocabCache;
+    var v = {};
+    function addAll(arr) { arr.forEach(function (t) { v[t] = 1; }); }
+    KB.forEach(function (e) { addAll(e._k); addAll(e._t); });
+    if (!passages) passages = harvest();
+    passages.forEach(function (p) { addAll(p._t); });
+    uniData().forEach(function (u) { addAll(tokens(u.name + ' ' + (u.location || '') + ' ' + (u.programs || '') + ' ' + (u.type || ''))); });
+    vocabCache = v;
+    return v;
+  }
+
+  // ---- 3. page search -----------------------------------------------------
+  var passages = null;
+  function harvest() {
+    var out = [];
+    function add(title, text, el) { text = String(text || '').replace(/\s+/g, ' ').trim(); if (text.length > 30) out.push({ title: title, text: text, el: el, _t: tokens(title + ' ' + text) }); }
+    $$('.faq-item').forEach(function (it) { add($('.faq-t', it).textContent, $('.faq-a p', it).textContent, it); });
+    var tpl = $('template[data-svc-data]');
+    if (tpl) Array.prototype.forEach.call(tpl.content.children, function (d) { add($('h3', d).textContent, d.textContent.replace($('h3', d).textContent, ''), $('#services')); });
+    $$('.step-card, .why-stat, .gp, .rung, .proof, .family-copy, .loans-grid, .quote, .tilt-card, .perks-row li, .welcome-copy, .hero-copy, .grants-intro, .settle-head, .why-copy').forEach(function (el) {
+      var h = $('h2, h3, b', el); add(h ? h.textContent : '', el.textContent, el);
+    });
+    $$('section[data-section]').forEach(function (s) { var h = $('h2', s), l = $('.lead', s); if (h && l) add(h.textContent, l.textContent, s); });
+    return out;
+  }
+  function searchPage(qt) {
+    if (!passages) passages = harvest();
+    var N = passages.length || 1, df = {};
+    passages.forEach(function (p) { var seen = {}; p._t.forEach(function (t) { if (!seen[t]) { seen[t] = 1; df[t] = (df[t] || 0) + 1; } }); });
+    var best = null;
+    passages.forEach(function (p) {
+      var s = 0, hit = 0;
+      qt.forEach(function (t) { if (p._t.indexOf(t) !== -1) { hit++; s += Math.log(1 + N / (df[t] || 1)); } });
+      if (hit && (!best || s > best.s)) best = { p: p, s: s, hit: hit };
+    });
+    if (!best) return null;
+    var need = Math.min(2, qt.length);
+    if (best.hit < need) return null;
+    // quote the most relevant sentences
+    var sents = best.p.text.match(/[^.!?]+[.!?]*/g) || [best.p.text], scored = sents.map(function (x, i) { var t = tokens(x); return { x: x, i: i, s: qt.filter(function (q) { return t.indexOf(q) !== -1; }).length }; });
+    var top = scored.filter(function (o) { return o.s > 0; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 3).sort(function (a, b) { return a.i - b.i; }).map(function (o) { return o.x; });
+    if (!top.length) top = sents.slice(0, 2);
+    return { title: best.p.title, text: top.join(' '), el: best.p.el };
+  }
+
+  // ---- answer -------------------------------------------------------------
+  var SMALL = [
+    [/^(hi|hello|hey|hii+|good (morning|afternoon|evening)|namaste)\b/i, 'Hello! 👋 What would you like to know about studying in the UK? You can ask about visas, universities, scholarships, loans, family relocation or our services.'],
+    [/\b(thanks|thank you|thx|great|awesome|cool|ok(ay)?)\b[.!]*$/i, 'You\'re welcome! Anything else you\'d like to know?'],
+    [/\b(bye|goodbye|see you)\b/i, 'Good luck with your UK plans! You can come back and ask anything any time.']
+  ];
+  function answer(text) {
+    var q = text.trim(), qt = tokens(q), specific = SPECIFIC.test(q);
+    for (var i = 0; i < SMALL.length; i++) if (SMALL[i][0].test(q) && qt.length <= 3) return { text: SMALL[i][1] };
+    // "universities in <place>" (checked first: "in Oxford" is a place, not the university)
+    var place = findPlace(q);
+    if (place && /\b(universities|unis|colleges|institutions|options)\b|\b(univ\w*|colleges?)\s+(in|near|at|around)\b/i.test(q)) {
+      var list = unisIn(place);
+      if (list.length) {
+        var name = place.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        var shown = list.slice(0, 6).map(function (x) { return '• ' + (x.ranked ? '#' + x.rank + ' ' : '') + x.name; }).join('\n');
+        return { text: 'Universities in **' + name + '** on this site:\n' + shown + (list.length > 6 ? '\n…and ' + (list.length - 6) + ' more on the universities page.' : '') + '\n\nAsk me about any of them, or open one to see its details.', more: list.length > 6 || !window.UK_UNIVERSITIES ? place : null };
+      }
+    }
+    // a named university
+    var u = findUni(q);
+    if (u) {
+      var ua = uniAnswer(u);
+      if (specific) ua.text = 'Fees and exact entry requirements for ' + u.name + ' aren\'t listed on this page — an advisor can give you those for your course.\n\n' + ua.text;
+      return ua;
+    }
+    // "best universities for <subject>"
+    var subj = findSubject(q);
+    if (subj) {
+      var exact = function (x) { return String(x.programs || '').toLowerCase().split(',').some(function (p) { return p.trim() === subj; }) ? 0 : 1; };
+      var by = uniData().filter(function (x) { return String(x.programs || '').toLowerCase().indexOf(subj) !== -1; }).sort(function (a, b) { return (exact(a) - exact(b)) || ((a.ranked ? a.rank : 1e9) - (b.ranked ? b.rank : 1e9)); });
+      if (by.length) return { text: 'Universities on this site known for **' + subj + '**:\n' + by.slice(0, 6).map(function (x) { return '• ' + (x.ranked ? '#' + x.rank + ' ' : '') + x.name; }).join('\n') + (by.length > 6 ? '\n…and ' + (by.length - 6) + ' more.' : '') + '\n\nEntry requirements depend on the course — an advisor checks them against your profile.', more: (by.length > 6 || !window.UK_UNIVERSITIES) ? subj : null };
+    }
+    var ranked = scoreKB(qt);
+    if (/\b(cost|costs|fees?|price|tuition|expens\w*|afford\w*|money|budget)\b/i.test(q) && !/\b(scholarship|grant|bursar|waiver|loan)/i.test(q)) ranked.forEach(function (r) { if (r.e.id === 'cost') r.s += 2.5; });
+    ranked.sort(function (a, b) { return b.s - a.s; });
+    var top = ranked[0], second = ranked[1];
+    // "Do you offer GRE coaching?": the only overlap is a generic word and the
+    // real subject never appears on the page → say so instead of guessing
+    if (top && top.s >= 2) {
+      var vocab = pageVocab(), unknownWords = qt.filter(function (t) { return !vocab[t] && t.length > 1; });
+      var hits = qt.filter(function (t) { return top.e._k.indexOf(t) !== -1; });
+      if (unknownWords.length && hits.every(function (t) { return WEAK[t]; })) top = null;
+    }
+    if (top && top.s >= 2) {
+      var txt = top.e.a;
+      // two topics in one question ("visa and loans") get both answers
+      if (/\band\b|\balso\b|,/i.test(q)) ranked.slice(1, 3).forEach(function (r) { if (r.s >= 2 && r.s >= top.s * 0.5) txt += '\n\n' + r.e.a; });
+      if (specific && !top.e.specific) txt += '\n\n' + ADVISOR_NOTE;
+      return { text: txt, sec: top.e.sec, form: top.e.form };
+    }
+    var hit = qt.length ? searchPage(qt) : null;
+    if (hit) return { text: (hit.title ? '**' + hit.title.trim() + '**\n' : '') + hit.text + (specific ? '\n\n' + ADVISOR_NOTE : ''), el: hit.el };
+    return { unknown: true, text: 'I couldn\'t find that on this page. For anything beyond what\'s here, our advisors can help — message us on WhatsApp, or book a free consultation and a counsellor will answer it for your profile.' };
+  }
+
+  function md(s) {
+    return esc(s).split(/\n{2,}/).map(function (p) { return '<p>' + p.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>') + '</p>'; }).join('');
+  }
   function initChat() {
     var panel = $('[data-chat]'), launcher = $('[data-chat-open]');
     if (!panel || !launcher) return;
     var list = $('[data-chat-list]', panel), chips = $('[data-chat-chips]', panel), typing = $('[data-chat-typing]', panel);
     var form = $('[data-chat-form]', panel), input = $('[data-chat-input]', panel), send = $('[data-chat-send]', panel);
-    var stage = 'idle', lead = {}, asked = false, seeded = false;
+    var seeded = false, small = window.matchMedia('(max-width: 640px)');
+    kbIndex();
     function clock() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-    function push(who, content) {
-      var m = document.createElement('div'); m.className = 'msg ' + who; m.innerHTML = md(content) + '<time>' + clock() + '</time>';
+    function push(who, content, actions) {
+      var m = document.createElement('div');
+      m.className = 'msg ' + who;
+      m.innerHTML = md(content) + '<time>' + clock() + '</time>';
+      if (actions && actions.length) {
+        var row = document.createElement('div');
+        row.className = 'msg-actions';
+        actions.forEach(function (a) {
+          var b = document.createElement(a.href ? 'a' : 'button');
+          if (a.href) { b.href = a.href; if (/^https?:/.test(a.href)) { b.target = '_blank'; b.rel = 'noopener'; } } else b.type = 'button';
+          b.className = 'msg-act' + (a.hot ? ' hot' : '');
+          b.textContent = a.label;
+          if (a.fn) b.addEventListener('click', a.fn);
+          row.appendChild(b);
+        });
+        m.insertBefore(row, $('time', m));
+      }
       list.insertBefore(m, who === 'ai' && !seeded ? chips : typing);
       if (hasGsap && !reduce) G.from(m, { y: 14, opacity: 0, duration: 0.4, ease: 'expo.out' });
       list.scrollTop = list.scrollHeight;
     }
     function typingOn(on) { typing.classList.toggle('is-on', on); list.scrollTop = list.scrollHeight; }
-    function later(fn, ms) { typingOn(true); setTimeout(function () { typingOn(false); fn(); }, ms); }
     function seed() { if (!seeded) { push('ai', WELCOME); seeded = true; } }
     function open() { seed(); panel.classList.add('is-open'); panel.setAttribute('aria-hidden', 'false'); launcher.setAttribute('aria-expanded', 'true'); launcher.classList.add('is-hidden'); setTimeout(function () { input.focus(); }, 250); }
     function close() { panel.classList.remove('is-open'); panel.setAttribute('aria-hidden', 'true'); launcher.setAttribute('aria-expanded', 'false'); launcher.classList.remove('is-hidden'); }
-    function reset() { $$('.msg', list).forEach(function (n) { n.remove(); }); stage = 'idle'; lead = {}; asked = false; seeded = false; chips.hidden = false; input.value = ''; sync(); typingOn(false); seed(); }
+    function reset() { $$('.msg', list).forEach(function (n) { n.remove(); }); seeded = false; chips.hidden = false; input.value = ''; sync(); typingOn(false); seed(); }
     function sync() { send.disabled = !input.value.trim(); }
-    function submitLead() {
-      return fetch(ENQUIRY_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({
-        subject: 'New Lead from Chatbot!', from_name: 'Tutee AI Counsellor', name: lead.name, phone: lead.phone, email: lead.email, destination: 'Chatbot General Inquiry',
-        study_level: ctx.study_level || undefined, intake: ctx.intake || undefined, funding: ctx.funding || undefined, shortlist: ctx.shortlist.join(', ') || undefined, page: enquiryPage()
-      }) }).then(function (r) { return r.json().catch(function () { return { success: false }; }); });
+    function showMe(target) {
+      return function () {
+        var el = typeof target === 'string' ? $(target) : target;
+        if (!el) { location.href = './index.html' + (typeof target === 'string' && target.charAt(0) === '#' ? target : ''); return; }
+        if (small.matches) close();
+        scrollToEl(el, -90);
+        if (el.classList && el.classList.contains('faq-item') && !el.classList.contains('is-open')) { var b = $('.faq-q', el); if (b) setTimeout(function () { b.click(); }, 900); }
+      };
+    }
+    function actionsFor(r) {
+      var a = [];
+      if (r.unknown) {
+        a.push({ label: 'Message an advisor', href: WA_URL, hot: true });
+        a.push({ label: 'Book a free consultation', fn: function () { close(); goToForm(); } });
+        return a;
+      }
+      if (r.uni) {
+        a.push({ label: 'Open details', fn: function () { openUni(r.uni, launcher); } });
+        a.push({ label: isShort(r.uni.name) ? 'Shortlisted ♥' : 'Shortlist ♥', fn: function (e) { setShort(r.uni.name, true); e.currentTarget.textContent = 'Shortlisted ♥'; } });
+        a.push({ label: 'Ask an advisor', fn: function () { setShort(r.uni.name, true); close(); goToForm('University Selection'); } });
+        return a;
+      }
+      if (r.more) a.push({ label: 'See them all', href: './universities.html?q=' + encodeURIComponent(r.more) });
+      if (r.sec && r.sec !== '#contact') a.push({ label: 'Show me', fn: showMe(r.sec) });
+      if (r.el) a.push({ label: 'Show me', fn: showMe(r.el) });
+      if (r.form) a.push({ label: 'Book a free consultation', hot: true, fn: function () { close(); goToForm(); } });
+      if (/advisor can confirm/.test(r.text)) a.push({ label: 'Ask an advisor', href: WA_URL });
+      return a;
     }
     function say(text) {
       text = (text || '').trim();
       if (!text) return;
       push('me', text); input.value = ''; sync(); chips.hidden = true;
-      if (stage === 'name') return later(function () { lead.name = text; stage = 'phone'; push('ai', 'Thanks ' + text.split(' ')[0] + '! What is the best **Phone Number** (with country code) to reach you at?'); }, 600);
-      if (stage === 'phone') return later(function () {
-        if (!/^[0-9]{7,15}$/.test(text.replace(/\D/g, ''))) return push('ai', "That doesn't look like a valid phone number. Please enter a valid number (e.g., +91 98765 43210).");
-        lead.phone = text; stage = 'email'; push('ai', 'Got it. Lastly, what is your **Email Address**?');
-      }, 600);
-      if (stage === 'email') return later(function () {
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) return push('ai', "That doesn't look like a valid email address. Could you double-check and try again?");
-        lead.email = text; stage = 'idle'; push('ai', 'Perfect! Submitting your profile to our experts now...'); typingOn(true);
-        submitLead().then(function (res) {
-          typingOn(false);
-          push('ai', res && res.success ? '✅ **Success!** Your profile has been assigned to an expert counsellor. They will contact you shortly to help with your admission and visa process.\n\nIs there anything else I can help you with in the meantime?' : 'Your profile was not sent. Please use the free evaluation form on this page, or message us on WhatsApp.');
-        }).catch(function () { typingOn(false); push('ai', 'Your profile was not sent because the connection dropped. Please use the free evaluation form or WhatsApp.'); });
-      }, 600);
-      if (/^evaluate my profile$/i.test(text)) return later(function () { stage = 'name'; push('ai', "I'd be happy to help you evaluate your profile! Our expert human counsellors review these directly to ensure accuracy.\n\nCould I please get your **Full Name**?"); }, 500);
-      later(function () {
-        push('ai', reply(text));
-        if (!asked) { asked = true; later(function () { stage = 'name'; push('ai', 'To give you the most accurate and personalised guidance for your unique profile, could I quickly grab your **Full Name**?'); }, 1500); }
-      }, 700);
+      typingOn(true);
+      setTimeout(function () {
+        typingOn(false);
+        var r = answer(text);
+        push('ai', r.text, actionsFor(r));
+      }, reduce ? 0 : 450 + Math.min(500, text.length * 6));
     }
     launcher.addEventListener('click', open);
     $$('[data-chat-open-inline]').forEach(function (b) { b.addEventListener('click', open); });
     $('[data-chat-close]', panel).addEventListener('click', close);
     $('[data-chat-reset]', panel).addEventListener('click', reset);
     $('[data-chat-contact]', panel).addEventListener('click', function () { close(); goToForm(); });
-    $$('button', chips).forEach(function (c) { c.addEventListener('click', function () { say(c.textContent); }); });
+    $$('button', chips).forEach(function (c) {
+      c.addEventListener('click', function () {
+        if (c.hasAttribute('data-chat-book')) { close(); goToForm(); return; }
+        say(c.textContent);
+      });
+    });
     input.addEventListener('input', function () { sync(); input.style.height = 'auto'; input.style.height = Math.min(110, input.scrollHeight) + 'px'; });
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); say(input.value); } });
     form.addEventListener('submit', function (e) { e.preventDefault(); say(input.value); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel.classList.contains('is-open')) close(); });
+    window.TC_ask = answer; // handy for testing in the console
   }
 
   /* Sections that are off screen pause their infinite CSS animations. */
