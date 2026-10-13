@@ -93,25 +93,28 @@
     // go (slow connection) the copy is on screen: don't hide it to re-animate.
     var held = root.classList.contains('hero-wait');
     if (!hasGsap || reduce || !held) { root.classList.remove('hero-wait'); hero.classList.add('is-ready'); return; }
-    var tl = G.timeline({ defaults: { ease: 'expo.out' }, delay: 0.1, onStart: function () { hero.classList.add('is-ready'); } });
+    // Tight on purpose: every piece of the hero is readable within ~0.6 s.
+    var tl = G.timeline({ defaults: { ease: 'expo.out' }, onStart: function () { hero.classList.add('is-ready'); } });
+    var phone = window.innerWidth <= 760;
     var titles = $$('[data-hero-title]');
     if (titles.length && window.SplitText) {
       // words rise out of their masks
       var words = [];
       titles.forEach(function (t) { words = words.concat(SplitText.create(t, { type: 'words', mask: 'words', aria: 'auto' }).words); });
-      tl.from(words, { yPercent: 115, duration: 1.3, stagger: 0.06, ease: 'expo.out' }, 0.2);
+      tl.from(words, { yPercent: 115, duration: 1, stagger: 0.04, ease: 'expo.out' }, 0.05);
     }
-    tl.from('.hero-cap', { scaleX: 0, duration: 1.1, ease: 'expo.inOut' }, 0.55)
-      .from('.dc', { y: 120, rotate: 0, opacity: 0, duration: 1.4, stagger: { each: 0.1, from: 'end' }, ease: 'expo.out', clearProps: 'transform,opacity' }, 0.3);
-    tl.from('[data-hero-in]', { y: 24, opacity: 0, duration: 1.4, stagger: 0.12 }, 0.6);
+    // front card first, so the main photo lands earliest
+    tl.from('.dc', { y: 90, rotate: 0, opacity: 0, duration: 1, stagger: { each: 0.07, from: 'start' }, ease: 'expo.out', clearProps: 'transform,opacity' }, 0.1);
+    tl.from('[data-hero-in]', { y: 18, opacity: 0, duration: 0.9, stagger: 0.07 }, 0.25);
     var sub = $('[data-blur-in]');
     if (sub && window.SplitText) {
       // after React Bits BlurText
       var s2 = SplitText.create(sub, { type: 'words', aria: 'auto' });
-      tl.from(s2.words, { filter: 'blur(8px)', opacity: 0, y: 10, duration: 1, stagger: 0.015, ease: 'power2.out' }, 0.8);
+      // the blur filter is costly per word on phones, so they get a plain fade
+      tl.from(s2.words, phone ? { opacity: 0, y: 8, duration: 0.6, stagger: 0.01, ease: 'power2.out' } : { filter: 'blur(8px)', opacity: 0, y: 10, duration: 0.7, stagger: 0.01, ease: 'power2.out', clearProps: 'filter' }, 0.35);
     }
     var img = $('[data-hero-img]');
-    if (img) tl.from(img, { scale: 1.12, duration: 2.6, ease: 'power3.out' }, 0);
+    if (img) tl.from(img, { scale: 1.12, duration: 2.2, ease: 'power3.out' }, 0);
     // every from-state above is already applied, so the copy can show now
     root.classList.remove('hero-wait');
   }
@@ -126,21 +129,38 @@
   function initTour() {
     var hero = $('[data-tour]');
     if (!hero) return;
-    var cards = $$('.dc', hero), caps = $$('.hero-cap img', hero), bgs = $$('.hero-bg img', hero), items = $$('.hero-tour-list li', hero), tour = $('.hero-tour', hero);
+    var cards = $$('.dc', hero), bgs = $$('.hero-bg img', hero), items = $$('.hero-tour-list li', hero), tour = $('.hero-tour', hero);
     var credit = $('[data-hero-credit]', hero), tpl = $('template[data-credits]', hero);
-    var credits = tpl ? tpl.innerHTML.split('|') : [], n = cards.length, i = 0, timer = null;
+    var credits = tpl ? tpl.innerHTML.split('|') : [], n = cards.length, i = 0;
+    // Only the first backdrop ships with a src; the others carry data-srcset
+    // so the first paint decodes one full-screen photo, not four.
+    function hydrate(im) {
+      if (!im || !im.hasAttribute('data-srcset')) return;
+      im.srcset = im.getAttribute('data-srcset'); im.src = im.getAttribute('data-src');
+      im.removeAttribute('data-srcset'); im.removeAttribute('data-src');
+    }
+    // once the page is idle, fetch the next photo so it is decoded before its turn
+    function warmNext() { idle(function () { hydrate(bgs[(i + 1) % n]); }); }
+    if (document.readyState === 'complete') warmNext(); else window.addEventListener('load', warmNext, { once: true });
     function show(k) {
       k = (k + n) % n;
       if (k === i) return;
-      // the old front card swings out to the left, then settles at the back
+      // the old front card swings out to the left, then settles at the back.
+      // Each card keeps its own timer: with one shared timer, a quick second
+      // change cancelled the first card's cleanup and left it stuck
+      // half-transparent on top of the deck.
       var leaving = cards[i];
+      clearTimeout(leaving._t);
+      leaving.style.transition = ''; leaving.style.translate = '';
       leaving.classList.add('is-leaving');
-      clearTimeout(timer);
-      timer = setTimeout(function () { leaving.classList.remove('is-leaving'); }, 520);
+      leaving._t = setTimeout(function () { leaving.classList.remove('is-leaving'); }, 520);
       i = k;
+      // swiping straight back: the incoming card may still be mid-exit
+      clearTimeout(cards[i]._t); cards[i].classList.remove('is-leaving');
       cards.forEach(function (c, j) { c.setAttribute('data-d', (j - i + n) % n); });
-      caps.forEach(function (im, j) { im.classList.toggle('is-active', j === i); });
+      hydrate(bgs[i]);
       bgs.forEach(function (im, j) { im.classList.toggle('is-active', j === i); });
+      warmNext();
       items.forEach(function (li, j) { li.classList.toggle('is-active', j === i); });
       if (credit && credits[i]) credit.textContent = credits[i];
     }
@@ -149,8 +169,39 @@
       $('.ht-bar', li).addEventListener('animationend', function () { if (j === i) show(i + 1); });
     });
     // clicking a card behind the front one brings it forward
-    cards.forEach(function (c, j) { c.addEventListener('click', function () { if (j !== i) show(j); }); });
+    // clicking a card: the front one advances to the next city, one behind
+    // it comes forward (ignored straight after a swipe). The card that just
+    // left still sits on top for ~0.5s while it tucks away, so a quick second
+    // click lands on it: treat that as "next" too, not "bring this one back".
+    cards.forEach(function (c, j) { c.addEventListener('click', function () {
+      if (Date.now() - swiped > 400) show(j === i || c.classList.contains('is-leaving') ? i + 1 : j);
+    }); });
     var visual = $('.hero-visual', hero);
+    // touch: swipe the deck (left = next, right = previous). The front card
+    // follows the finger via `translate`, which stacks with its rotation.
+    // Vertical drags are left to the page scroll (touch-action: pan-y).
+    var sx = 0, sy = 0, dx = 0, axis = '', front = null, swiped = 0;
+    visual.addEventListener('touchstart', function (e) {
+      var t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; axis = ''; front = cards[i];
+    }, { passive: true });
+    visual.addEventListener('touchmove', function (e) {
+      var t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
+      if (!axis && (Math.abs(mx) > 8 || Math.abs(my) > 8)) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+      if (axis !== 'x') return;
+      dx = mx;
+      tour.classList.add('is-paused');
+      if (!reduce) { front.style.transition = 'none'; front.style.translate = dx * 0.6 + 'px 0'; }
+    }, { passive: true });
+    function endSwipe() {
+      if (axis === 'x') {
+        front.style.transition = ''; front.style.translate = '';
+        tour.classList.remove('is-paused');
+        if (Math.abs(dx) > 45) { swiped = Date.now(); show(dx < 0 ? i + 1 : i - 1); }
+      }
+      axis = '';
+    }
+    visual.addEventListener('touchend', endSwipe);
+    visual.addEventListener('touchcancel', endSwipe);
     visual.addEventListener('pointerenter', function () { tour.classList.add('is-paused'); });
     visual.addEventListener('pointerleave', function () { tour.classList.remove('is-paused'); });
     // reduced motion: no autoplay (the bars never run), clicks still work
@@ -333,6 +384,10 @@
       motion: '(prefers-reduced-motion: no-preference)'
     }, function (c) {
       var big = c.conditions.big, motion = c.conditions.motion, alive = true;
+      // Phones scroll fast through tall stacked sections: reveals start as soon
+      // as an element enters, travel less and finish quicker, so nothing sits
+      // as an empty gap on screen waiting for its turn.
+      var phone = window.innerWidth <= 760, IN = phone ? 'top 98%' : 'top 85%';
       if (!motion) return;
       function later(fn) { idle(function () { if (alive) c.add(fn); }); }
 
@@ -342,25 +397,14 @@
           later(function () { SplitText.create(h, {
             type: 'lines', mask: 'lines', linesClass: 'split-line', autoSplit: true, aria: 'auto',
             onSplit: function (self) {
-              return G.from(self.lines, { yPercent: 105, duration: 1.1, stagger: 0.1, ease: 'expo.out', scrollTrigger: { trigger: h, start: 'top 85%', once: true } });
+              return G.from(self.lines, { yPercent: 105, duration: 1.1, stagger: 0.1, ease: 'expo.out', scrollTrigger: { trigger: h, start: IN, once: true } });
             }
           }); });
         });
       }
 
-      /* Generic staggered rise. */
-      ScrollTrigger.batch('[data-rise]', {
-        start: 'top 88%', once: true,
-        onEnter: function (els) { G.from(els, { y: 50, opacity: 0, duration: 1, stagger: 0.1, ease: 'expo.out' }); }
-      });
-
-      /* Counters (after React Bits CountUp). */
-      $$('[data-count]').forEach(function (el) {
-        var end = +el.getAttribute('data-count'), o = { v: 0 }, shown = -1;
-        // text changes cost a layout, so only write when the number actually changes
-        G.to(o, { v: end, duration: 1.8, ease: 'power3.out', scrollTrigger: { trigger: el, start: 'top 90%', once: true }, onUpdate: function () { var n = Math.round(o.v); if (n !== shown) { shown = n; el.textContent = n; } } });
-      });
-
+      /* The two pinned sections first and in page order: they add scroll
+         length, so every other trigger's position depends on them. */
       /* Welcome: the photo grows from a framed card to full bleed. */
       var welcome = $('[data-welcome]');
       if (welcome) {
@@ -371,53 +415,9 @@
             .fromTo(img, { scale: 1.35 }, { scale: 1, ease: 'none', duration: 1 }, 0)
             .from(copy.children, { y: 80, opacity: 0, stagger: 0.12, duration: 0.5, ease: 'power2.out' }, 0.55);
         } else {
-          G.from(copy.children, { y: 40, opacity: 0, stagger: 0.12, duration: 0.9, ease: 'expo.out', scrollTrigger: { trigger: welcome, start: 'top 70%', once: true } });
+          G.from(copy.children, { y: phone ? 20 : 40, opacity: 0, stagger: phone ? 0.08 : 0.12, duration: phone ? 0.6 : 0.9, ease: 'expo.out', scrollTrigger: { trigger: welcome, start: phone ? 'top 90%' : 'top 70%', once: true } });
           G.fromTo(img, { scale: 1.2 }, { scale: 1, ease: 'none', scrollTrigger: { trigger: welcome, start: 'top bottom', end: 'bottom top', scrub: true } });
         }
-      }
-
-      /* Journey: the spine fills as you scroll, the plane rides its tip, and
-         each step lights up and slides in from its side. */
-      var spine = $('[data-spine]');
-      if (spine) {
-        var fill = $('[data-spine-fill]', spine), plane = $('[data-spine-plane]', spine), line = $('.spine', spine), lineH = line.offsetHeight;
-        G.fromTo(fill, { scaleY: 0 }, {
-          scaleY: 1, ease: 'none',
-          scrollTrigger: {
-            trigger: spine, start: 'top 60%', end: 'bottom 60%', scrub: 0.6,
-            onRefresh: function () { lineH = line.offsetHeight; },
-            onUpdate: function (s) { if (plane) G.set(plane, { y: s.progress * lineH }); }
-          }
-        });
-        $$('.step', spine).forEach(function (st) {
-          ScrollTrigger.create({ trigger: st, start: 'top 62%', toggleClass: { targets: st, className: 'is-on' } });
-          var fromRight = st.classList.contains('step-r') || window.innerWidth <= 760;
-          G.from($('.step-card', st), { x: fromRight ? 70 : -70, opacity: 0, duration: 1, ease: 'expo.out', scrollTrigger: { trigger: st, start: 'top 85%', once: true } });
-        });
-        G.from($$('.phase span', spine), { scale: 0.6, opacity: 0, duration: 0.7, ease: 'back.out(2)', stagger: 0.1, scrollTrigger: { trigger: spine, start: 'top 80%', once: true } });
-      }
-
-      /* Hero photo drifts slower than the page; Why-UK photo parallax. */
-      var heroImg = $('[data-hero-img]');
-      if (heroImg) G.fromTo(heroImg, { yPercent: 0 }, { yPercent: -4, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
-      // big screens: the hero content lifts away and fades as the page takes over
-      var heroBody = $('[data-hero-body]');
-      if (heroBody && big) {
-        var heroOut = { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true };
-        G.to(heroBody, { yPercent: -10, opacity: 0, ease: 'none', scrollTrigger: heroOut });
-      }
-      var whyBg = $('[data-why-bg]');
-      if (whyBg) G.fromTo(whyBg, { yPercent: -8 }, { yPercent: 8, ease: 'none', scrollTrigger: { trigger: '.why', start: 'top bottom', end: 'bottom top', scrub: true } });
-
-      /* Why UK / Loans: words come into focus as you read (after React Bits ScrollReveal). */
-      if (window.SplitText) {
-        $$('[data-scroll-reveal]').forEach(function (p) { later(function () {
-          var s = SplitText.create(p, { type: 'words', aria: 'auto' });
-          var from = { opacity: 0.14 }, to = { opacity: 1 };
-          to.stagger = 0.06; to.ease = 'none';
-          to.scrollTrigger = { trigger: p, start: 'top 82%', end: 'bottom 50%', scrub: true };
-          G.fromTo(s.words, from, to);
-        }); });
       }
 
       /* Services: horizontal track pinned on big screens. */
@@ -441,21 +441,105 @@
         }, { passive: true });
       }
 
-      /* Map: the coastline draws itself, then the pins drop in. */
-      var mapBox = $('.map-box');
-      if (mapBox && window.DrawSVGPlugin) {
-        G.timeline({ scrollTrigger: { trigger: mapBox, start: 'top 75%', once: true } })
-          .from('.uk-land', { drawSVG: '0%', fillOpacity: 0, duration: 2.4, ease: 'power2.inOut', stagger: 0.3 })
-          .from('.pin', { scale: 0, transformOrigin: '50% 50%', opacity: 0, stagger: 0.08, duration: 0.6, ease: 'back.out(2)' }, '-=0.8');
-      }
+      /* Everything else is set up in small pieces between frames (setting it
+         all up at once blocked the main thread for ~150 ms), then one refresh
+         puts every trigger in its final place. */
+      later(function () {
+        /* Generic staggered rise. */
+        ScrollTrigger.batch('[data-rise]', {
+          start: phone ? 'top 100%' : 'top 88%', once: true,
+          onEnter: function (els) { G.from(els, { y: phone ? 18 : 50, opacity: 0, duration: phone ? 0.6 : 1, stagger: phone ? 0.05 : 0.1, ease: 'expo.out' }); }
+        });
+      });
 
-      /* Image reveals + parallax. */
-      $$('[data-clip]').forEach(function (el, i) {
-        G.from(el, { clipPath: 'inset(100% 0% 0% 0% round 28px)', duration: 1.4, delay: i * 0.15, ease: 'expo.inOut', scrollTrigger: { trigger: el.parentElement, start: 'top 75%', once: true } });
+      later(function () {
+        /* Counters (after React Bits CountUp). */
+        $$('[data-count]').forEach(function (el) {
+          var end = +el.getAttribute('data-count'), o = { v: 0 }, shown = -1;
+          // text changes cost a layout, so only write when the number actually changes
+          G.to(o, { v: end, duration: 1.8, ease: 'power3.out', scrollTrigger: { trigger: el, start: 'top 90%', once: true }, onUpdate: function () { var n = Math.round(o.v); if (n !== shown) { shown = n; el.textContent = n; } } });
+        });
       });
-      $$('[data-parallax]').forEach(function (img) {
-        G.fromTo(img, { yPercent: -8 }, { yPercent: 4, ease: 'none', scrollTrigger: { trigger: img.parentElement, start: 'top bottom', end: 'bottom top', scrub: true } });
+
+      later(function () {
+        /* Journey: the spine fills as you scroll, the plane rides its tip, and
+           each step lights up and slides in from its side. */
+        var spine = $('[data-spine]');
+        if (spine) {
+          var fill = $('[data-spine-fill]', spine), plane = $('[data-spine-plane]', spine), line = $('.spine', spine), lineH = line.offsetHeight;
+          G.fromTo(fill, { scaleY: 0 }, {
+            scaleY: 1, ease: 'none',
+            // the plane follows the (smoothed) fill itself, so it sits exactly on its tip
+            onUpdate: function () { if (plane) G.set(plane, { y: this.progress() * lineH }); },
+            scrollTrigger: {
+              trigger: spine, start: 'top 60%', end: 'bottom 60%', scrub: 0.6,
+              onRefresh: function () { lineH = line.offsetHeight; }
+            }
+          });
+          $$('.step', spine).forEach(function (st) {
+            ScrollTrigger.create({ trigger: st, start: 'top 62%', toggleClass: { targets: st, className: 'is-on' } });
+            var fromRight = st.classList.contains('step-r') || window.innerWidth <= 760;
+            // phones: a short rise instead of a sideways slide (no off-screen overflow)
+            G.from($('.step-card', st), phone ? { y: 18, opacity: 0, duration: 0.6, ease: 'expo.out', scrollTrigger: { trigger: st, start: 'top 98%', once: true } } : { x: fromRight ? 70 : -70, opacity: 0, duration: 1, ease: 'expo.out', scrollTrigger: { trigger: st, start: 'top 85%', once: true } });
+          });
+          G.from($$('.phase span', spine), { scale: 0.6, opacity: 0, duration: 0.7, ease: 'back.out(2)', stagger: 0.1, scrollTrigger: { trigger: spine, start: 'top 80%', once: true } });
+        }
       });
+
+      later(function () {
+        /* Hero photo drifts slower than the page; Why-UK photo parallax. */
+        var heroImg = $('[data-hero-img]');
+        if (heroImg) G.fromTo(heroImg, { yPercent: 0 }, { yPercent: -4, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
+        // big screens: the hero content lifts away and fades as the page takes over
+        var heroBody = $('[data-hero-body]');
+        if (heroBody && big) {
+          var heroOut = { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true };
+          G.to(heroBody, { yPercent: -10, opacity: 0, ease: 'none', scrollTrigger: heroOut });
+        }
+        var whyBg = $('[data-why-bg]');
+        if (whyBg) G.fromTo(whyBg, { yPercent: -8 }, { yPercent: 8, ease: 'none', scrollTrigger: { trigger: '.why', start: 'top bottom', end: 'bottom top', scrub: true } });
+      });
+
+      later(function () {
+        /* Why UK / Loans: words come into focus as you read (after React Bits ScrollReveal). */
+        if (window.SplitText) {
+          $$('[data-scroll-reveal]').forEach(function (p) { later(function () {
+            var s = SplitText.create(p, { type: 'words', aria: 'auto' });
+            var from = { opacity: 0.3 }, to = { opacity: 1 };
+            to.stagger = 0.06; to.ease = 'none';
+            // finishes while the paragraph is still low on screen, so it is never left dim mid-read
+            to.scrollTrigger = { trigger: p, start: 'top 90%', end: window.innerWidth <= 760 ? 'bottom 85%' : 'bottom 65%', scrub: true };
+            G.fromTo(s.words, from, to);
+          }); });
+        }
+      });
+
+      later(function () {
+        /* Map: the coastline draws itself, then the pins drop in. */
+        var mapBox = $('.map-box');
+        if (mapBox && window.DrawSVGPlugin) {
+          G.timeline({ scrollTrigger: { trigger: mapBox, start: phone ? 'top 95%' : 'top 75%', once: true } })
+            // phones: the land shows almost at once (fill first, outline traced over
+            // it in under a second) so the map is never an empty box
+            .from('.uk-land', phone ? { drawSVG: '0%', fillOpacity: 0.25, duration: 0.9, ease: 'power2.out', stagger: 0.1 } : { drawSVG: '0%', fillOpacity: 0, duration: 2.4, ease: 'power2.inOut', stagger: 0.3 })
+            .from('.pin', { scale: 0, transformOrigin: '50% 50%', opacity: 0, stagger: phone ? 0.03 : 0.08, duration: phone ? 0.4 : 0.6, ease: 'back.out(2)' }, phone ? '-=0.5' : '-=0.8');
+        }
+      });
+
+      later(function () {
+        /* Image reveals + parallax. */
+        $$('[data-clip]').forEach(function (el, i) {
+          // phones: a quick fade rather than a long wipe that leaves an empty frame
+          if (phone) G.from(el, { opacity: 0, duration: 0.6, ease: 'power2.out', scrollTrigger: { trigger: el, start: 'top 98%', once: true } });
+          // the wipe starts as the photo enters and is short, so it never reads as "not loaded"
+          else G.from(el, { clipPath: 'inset(100% 0% 0% 0% round 28px)', duration: 0.8, ease: 'expo.out', scrollTrigger: { trigger: el, start: 'top 95%', once: true } });
+        });
+        $$('[data-parallax]').forEach(function (img) {
+          G.fromTo(img, { yPercent: -8 }, { yPercent: 4, ease: 'none', scrollTrigger: { trigger: img.parentElement, start: 'top bottom', end: 'bottom top', scrub: true } });
+        });
+      });
+
+      idle(function () { if (alive) ScrollTrigger.refresh(); });
 
       return function () { alive = false; if (svcSec) svcSec.classList.remove('is-hpin'); };
     });
@@ -811,7 +895,8 @@
     });
     document.addEventListener('visibilitychange', sync);
     if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { onscreen = es[0].isIntersecting; sync(); }).observe(wall);
-    if (hasGsap) G.from($$('.wall-col', wall), { y: 60, opacity: 0, stagger: 0.15, duration: 1.1, ease: 'expo.out', scrollTrigger: { trigger: wall, start: 'top 85%', once: true } });
+    var phone = window.innerWidth <= 760;
+    if (hasGsap) G.from($$('.wall-col', wall), { y: phone ? 20 : 60, opacity: 0, stagger: phone ? 0.08 : 0.15, duration: phone ? 0.6 : 1.1, ease: 'expo.out', scrollTrigger: { trigger: wall, start: phone ? 'top 98%' : 'top 85%', once: true } });
   }
 
   /* ================================================================= *
@@ -888,6 +973,14 @@
    * lives on <body> (position: fixed) so no parent's overflow can clip it,
    * and it opens upwards when there's no room below.
    * ================================================================= */
+  /* Country flags: small SVG images from flagcdn.com (every system draws
+     them; emoji flags don't exist on Windows). ~1 KB each, loaded only
+     for the button and for list rows as the list is opened. */
+  function flagHTML(iso, eager) {
+    if (!iso) return '';
+    var c = iso.toLowerCase();
+    return '<img class="dd-flag" src="https://flagcdn.com/' + c + '.svg" width="22" height="16" alt="" aria-hidden="true" decoding="async"' + (eager ? '' : ' loading="lazy"') + '>';
+  }
   var ddOpen = null, ddSeq = 0;
   function initDropdowns() {
     $$('select:not([data-native])').forEach(enhanceSelect);
@@ -925,11 +1018,14 @@
     }
 
     var opts = Array.prototype.slice.call(sel.options);
+    var rich = sel.getAttribute('data-rich') === 'country';
+    if (rich) wrap.classList.add('dd-rich');
     var long = opts.length > 12;
+    var hint = rich ? 'Search country or code' : 'Type to search';
     var panel = document.createElement('div');
     panel.className = 'dd-panel'; panel.hidden = true;
     panel.setAttribute('data-lenis-prevent', '');
-    panel.innerHTML = (long ? '<div class="dd-search"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-search"/></svg><input type="text" placeholder="Type to search" aria-label="Search options" autocomplete="off" spellcheck="false"></div>' : '') +
+    panel.innerHTML = (long ? '<div class="dd-search"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-search"/></svg><input type="text" placeholder="' + hint + '" aria-label="Search options" autocomplete="off" spellcheck="false"></div>' : '') +
       '<ul class="dd-list" role="listbox" id="' + id + '-list" tabindex="-1"></ul><p class="dd-empty">No matches</p>';
     document.body.appendChild(panel);
     var list = $('.dd-list', panel), search = $('input', panel), host = search || list;
@@ -939,7 +1035,10 @@
     var items = opts.map(function (o, i) {
       var li = document.createElement('li');
       li.id = id + '-o' + i; li.className = 'dd-opt'; li.setAttribute('role', 'option');
-      li.innerHTML = '<span>' + esc(o.text) + '</span><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>';
+      li.innerHTML = rich
+        ? flagHTML(o.getAttribute('data-iso')) + '<span class="dd-name">' + esc(o.text) + '</span><span class="dd-dial">' + esc(o.value) + '</span><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>'
+        : '<span>' + esc(o.text) + '</span><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>';
+      if (rich) li.className += ' dd-opt-rich';
       if (o.hasAttribute('data-placeholder')) { li.hidden = true; li._ph = true; }
       li.addEventListener('click', function () { pick(i); close(true); });
       li.addEventListener('pointermove', function () { if (active !== i) setActive(i, false); });
@@ -950,7 +1049,8 @@
     var active = -1, isOpen = false, buf = '', bufT = 0;
     function sync() {
       var o = sel.options[sel.selectedIndex];
-      $('.dd-val', btn).textContent = o ? o.text : '';
+      if (rich && o) $('.dd-val', btn).innerHTML = flagHTML(o.getAttribute('data-iso'), true) + '<span>' + esc(o.value) + '</span>';
+      else $('.dd-val', btn).textContent = o ? o.text : '';
       wrap.classList.toggle('is-placeholder', !!(o && o.hasAttribute('data-placeholder')));
       items.forEach(function (li, i) { li.setAttribute('aria-selected', i === sel.selectedIndex ? 'true' : 'false'); });
     }
@@ -973,7 +1073,7 @@
       var r = btn.getBoundingClientRect(), vh = window.innerHeight, vw = document.documentElement.clientWidth;
       if (onScroll && (r.bottom < 0 || r.top > vh)) { close(false); return; }
       var below = vh - r.bottom - 12, above = r.top - 12, up = below < 220 && above > below;
-      var w = Math.max(r.width, 230);
+      var w = Math.max(r.width, rich ? Math.min(330, vw - 16) : 230);
       panel.style.width = w + 'px';
       panel.style.left = Math.max(8, Math.min(r.left, vw - w - 8)) + 'px';
       panel.style.maxHeight = Math.max(150, Math.min(long ? 340 : 320, up ? above : below)) + 'px';
@@ -983,7 +1083,10 @@
     }
     function filter(q) {
       q = q.trim().toLowerCase();
-      items.forEach(function (li, i) { li.hidden = li._ph || (!!q && opts[i].text.toLowerCase().indexOf(q) === -1); });
+      items.forEach(function (li, i) {
+        var hay = (opts[i].text + ' ' + (rich ? opts[i].value + ' ' + opts[i].value.slice(1) + ' ' + (opts[i].getAttribute('data-iso') || '') : '')).toLowerCase();
+        li.hidden = li._ph || (!!q && hay.indexOf(q) === -1);
+      });
       var v = visible();
       panel.classList.toggle('is-empty', !v.length);
       setActive(v.length ? v[0] : -1, true);
@@ -1087,10 +1190,9 @@
   function initBoardingPass() {
     var form = $('form[data-lead-form]'), box = $('[data-bp]');
     if (!form || !box) return;
-    var map = { name: '#f-name', study_level: '#f-level', intake: '#f-intake', funding: '#f-funding', interest: '#f-interest' };
+    var map = { name: '#f-name', state: '#f-state', shortlist: '#f-short' };
     var dds = $$('[data-bp-k]', box);
     function text(k) {
-      if (k === 'shortlist') return ctx.shortlist.length ? ctx.shortlist.length + ' — ' + ctx.shortlist.join(', ') : '';
       var el = $(map[k], form);
       if (!el) return '';
       if (el.tagName === 'SELECT') {
@@ -1134,10 +1236,187 @@
       if (f) f.focus({ preventScroll: true });
     }
     wiz = { go: go, focus: focusFirst, step: 1 };
-    $('[data-wiz-next]', form).addEventListener('click', function () { go(2); if (fine) focusFirst(); });
+    var nextBtn = $('[data-wiz-next]', form), nextHTML = nextBtn.innerHTML;
+    nextBtn.addEventListener('click', function () {
+      if (!verify) { go(2); if (fine) focusFirst(); return; }
+      nextBtn.disabled = true; nextBtn.innerHTML = '<span>Checking…</span>';
+      verify.step1().then(function (ok) {
+        nextBtn.disabled = false; nextBtn.innerHTML = nextHTML;
+        if (ok) { go(2); focusFirst(); }
+      });
+    });
     $('[data-wiz-back]', form).addEventListener('click', function () { go(1); if (fine) focusFirst(); });
     $$('select[data-ctx]', form).forEach(function (s) { s.addEventListener('change', function () { ctx[s.getAttribute('data-ctx')] = s.value; }); });
     go(1, true);
+  }
+
+  /* ================================================================= *
+   * Contact checks for step 1 of the form ("smart validation"):
+   *   name  — letters, at least two characters
+   *   phone — length (and leading digit where it is fixed) for the chosen
+   *           country; a pasted country code or trunk 0 is stripped
+   *   email — format, a "did you mean …?" for common domain typos, and a
+   *           server check that the domain can actually receive mail
+   * Fields are checked when you leave them, then live as you correct them.
+   * ================================================================= */
+  var PHONE_RULES = {
+    '+91': [10, 10, /^[6-9]/, 'Indian mobile numbers start with 6, 7, 8 or 9.'],
+    '+44': [9, 10], '+1': [10, 10, /^[2-9]/], '+971': [8, 9], '+61': [9, 9], '+65': [8, 8, /^[689]/],
+    '+60': [9, 10], '+64': [8, 10], '+353': [9, 9], '+49': [10, 11], '+33': [9, 9], '+966': [9, 9],
+    '+974': [8, 8], '+965': [8, 8], '+968': [8, 8], '+92': [10, 10], '+94': [9, 9], '+977': [10, 10],
+    '+880': [10, 10], '+63': [10, 10], '+62': [9, 12], '+86': [11, 11], '+81': [10, 10], '+82': [9, 10],
+    '+27': [9, 9], '+234': [10, 10], '+254': [9, 9], '+20': [10, 10], '+90': [10, 10], '+7': [10, 10],
+    '+39': [9, 11], '+34': [9, 9], '+31': [9, 9], '+55': [10, 11], '+52': [10, 10], '+230': [7, 8]
+  };
+  function checkName(v) {
+    v = v.trim();
+    if (!v) return { ok: false, msg: 'Enter your full name.' };
+    if (v.replace(/[^A-Za-zÀ-ɏऀ-ॿ]/g, '').length < 2) return { ok: false, msg: 'Enter your full name using letters.' };
+    if (/\d/.test(v)) return { ok: false, msg: 'Names can’t contain numbers.' };
+    return { ok: true };
+  }
+  function checkPhone(code, raw) {
+    var d = String(raw || '').replace(/\D/g, '');
+    if (!d) return { ok: false, msg: 'Enter your phone number.' };
+    var cc = code.slice(1);
+    if (d.length > 10 && d.indexOf(cc) === 0) d = d.slice(cc.length);   // typed the country code too
+    if (d.charAt(0) === '0' && code !== '+39') d = d.slice(1);            // trunk 0
+    var r = PHONE_RULES[code] || [6, 14];
+    if (d.length < r[0] || d.length > r[1]) {
+      var want = r[0] === r[1] ? r[0] + ' digits' : r[0] + '–' + r[1] + ' digits';
+      return { ok: false, msg: 'Numbers for ' + code + ' have ' + want + ' — this has ' + d.length + '.' };
+    }
+    if (r[2] && !r[2].test(d)) return { ok: false, msg: r[3] || 'That doesn’t look like a valid ' + code + ' number.' };
+    if (/^(\d)\1+$/.test(d) || d === '1234567890') return { ok: false, msg: 'Please enter a real phone number.' };
+    return { ok: true, national: d };
+  }
+  var EMAIL_RE = /^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+  var MAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'yahoo.co.in', 'yahoo.in', 'hotmail.com', 'outlook.com', 'outlook.in', 'live.com', 'icloud.com', 'rediffmail.com', 'protonmail.com', 'proton.me', 'aol.com', 'msn.com', 'ymail.com', 'zoho.com', 'hotmail.co.uk', 'yahoo.co.uk', 'me.com'];
+  // edit distance where swapping two neighbouring letters counts as one typo
+  function lev(a, b) {
+    var m = a.length, n = b.length, d = [], i, j;
+    for (i = 0; i <= m; i++) { d[i] = [i]; }
+    for (j = 0; j <= n; j++) d[0][j] = j;
+    for (i = 1; i <= m; i++) for (j = 1; j <= n; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[m][n];
+  }
+  function checkEmail(v) {
+    v = v.trim();
+    if (!v) return { ok: false, msg: 'Enter your email address.' };
+    if (!EMAIL_RE.test(v) || /\.\./.test(v)) return { ok: false, msg: 'Enter an email like name@example.com.' };
+    var at = v.lastIndexOf('@'), user = v.slice(0, at), dom = v.slice(at + 1).toLowerCase(), fix = '';
+    if (MAIL_DOMAINS.indexOf(dom) === -1) {
+      // fix a mistyped ".com" first, then look for a near-miss of a common provider
+      var tld = dom.replace(/\.(con|cmo|ocm|cpm|vom|xom|comm|om|cm|co)$/, '.com');
+      if (/\.co$/.test(dom) && !/^(gmail|yahoo|hotmail|outlook|icloud|rediffmail)\.co$/.test(dom)) tld = dom;   // .co is a real TLD
+      var best = '', bd = 3;
+      MAIL_DOMAINS.forEach(function (d) { var k = lev(tld, d); if (k < bd) { bd = k; best = d; } });
+      if (best && bd <= 2 && best !== dom) fix = best;
+      else if (tld !== dom) fix = tld;
+    }    return { ok: true, domain: dom, suggest: fix ? user + '@' + fix : '' };
+  }
+  // Can this domain receive mail? Asked of our own function (it does the DNS
+  // lookup), cached per domain. null = couldn't tell, which never blocks.
+  var mxCache = {};
+  function checkMailDomain(dom) {
+    if (dom in mxCache) return Promise.resolve(mxCache[dom]);
+    if (MAIL_DOMAINS.indexOf(dom) !== -1) return Promise.resolve(mxCache[dom] = true);
+    var ctl = window.AbortController ? new AbortController() : null, t = setTimeout(function () { if (ctl) ctl.abort(); }, 3500);
+    return fetch(ENQUIRY_ENDPOINT + '?mx=' + encodeURIComponent(dom), { signal: ctl ? ctl.signal : undefined, headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { var v = j && typeof j.mx === 'boolean' ? j.mx : null; if (v !== null) mxCache[dom] = v; return v; })
+      .catch(function () { return null; })
+      .then(function (v) { clearTimeout(t); return v; });
+  }
+
+  var verify = null;
+  function initVerify() {
+    var form = $('form[data-lead-form]');
+    if (!form || !$('#f-email', form)) return;
+    var name = $('#f-name', form), phone = $('#f-phone', form), code = $('#f-code', form), email = $('#f-email', form);
+    var touched = {}, emailState = { value: '', ok: false, mx: null, pending: null }, emailT = 0;
+
+    function show(input, ok, msg, html) {
+      var fl = input.closest('.fl'), box = fl.closest('[data-field]') || fl, m = $('.fl-msg', box);
+      fl.classList.toggle('is-invalid', ok === false);
+      fl.classList.toggle('is-valid', ok === true);
+      input.setAttribute('aria-invalid', ok === false ? 'true' : 'false');
+      if (!m) return;
+      if (html) m.innerHTML = html; else m.textContent = msg || '';
+      m.classList.toggle('is-error', ok === false);
+      m.classList.toggle('is-hint', ok !== false && !!(msg || html));
+    }
+    function runName() { var r = checkName(name.value); show(name, r.ok, r.ok ? '' : r.msg); return r.ok; }
+    function runPhone() {
+      var r = checkPhone(code.value, phone.value);
+      show(phone, r.ok, r.ok ? '' : r.msg);
+      if (r.ok) phone._national = r.national;
+      return r.ok;
+    }
+    function runEmail(withDomain) {
+      var v = email.value.trim(), r = checkEmail(v);
+      if (!r.ok) { emailState = { value: v, ok: false }; show(email, false, r.msg); return Promise.resolve(false); }
+      var hint = r.suggest ? 'Did you mean <button type="button" class="fl-fix" data-fix="' + esc(r.suggest) + '">' + esc(r.suggest) + '</button>?' : '';
+      show(email, true, '', hint);
+      if (!withDomain) return Promise.resolve(true);
+      email.closest('.fl').classList.add('is-checking');
+      return checkMailDomain(r.domain).then(function (mx) {
+        email.closest('.fl').classList.remove('is-checking');
+        if (email.value.trim() !== v) return checkEmail(email.value).ok;   // they kept typing
+        if (mx === false) { show(email, false, '', '<b>' + esc(r.domain) + '</b> can’t receive email. Check the spelling.' + (hint ? ' ' + hint : '')); return false; }
+        return true;
+      });
+    }
+    form.addEventListener('click', function (e) {
+      var b = e.target.closest('.fl-fix');
+      if (!b) return;
+      email.value = b.getAttribute('data-fix');
+      email.dispatchEvent(new Event('input', { bubbles: true }));
+      runEmail(true);
+      email.focus();
+    });
+    name.addEventListener('blur', function () { if (name.value.trim()) { touched.name = 1; runName(); } });
+    phone.addEventListener('blur', function () { if (phone.value.trim()) { touched.phone = 1; runPhone(); } });
+    email.addEventListener('blur', function () { if (email.value.trim()) { touched.email = 1; runEmail(true); } });
+    name.addEventListener('input', function () { if (touched.name) runName(); });
+    // keep only what a phone number can contain
+    phone.addEventListener('input', function () {
+      var c = phone.value.replace(/[^\d\s()+-]/g, '');
+      if (c !== phone.value) phone.value = c;
+      if (touched.phone) runPhone();
+    });
+    code.addEventListener('change', function () { if (touched.phone || phone.value.trim()) runPhone(); });
+    email.addEventListener('input', function () {
+      if (!touched.email) return;
+      clearTimeout(emailT);
+      runEmail(false);
+      emailT = setTimeout(function () { runEmail(true); }, 700);
+    });
+
+    verify = {
+      // every step-1 check, including the mail-domain lookup; focuses the first problem
+      step1: function () {
+        touched.name = touched.phone = touched.email = 1;
+        var a = runName(), b = runPhone();
+        return runEmail(true).then(function (c) {
+          var bad = !a ? name : !b ? phone : !c ? email : null;
+          if (bad) {
+            bad.focus({ preventScroll: false });
+            var fl = bad.closest('.fl');
+            if (hasGsap && !reduce) G.fromTo(fl, { x: -8 }, { x: 0, duration: 0.5, ease: 'elastic.out(1, .3)' });
+          }
+          return !bad;
+        });
+      },
+      phone: function () { return code.value + ' ' + (phone._national || phone.value.replace(/\D/g, '')); },
+      reset: function () {
+        touched = {};
+        [name, phone, email].forEach(function (i) { show(i, null, ''); });
+      }
+    };
   }
 
   /* ================================================================= *
@@ -1202,8 +1481,12 @@
     var form = $('form[data-lead-form]');
     if (!form) return;
     ['study_level', 'intake', 'funding'].forEach(function (k) { var f = $('[data-ctx="' + k + '"]', form); if (f && ctx[k] && f.value !== ctx[k]) f.value = ctx[k]; });
-    $('[data-ctx="shortlist"]', form).value = ctx.shortlist.join(', ');
+    // the shortlist field follows the hearts on the map until the visitor
+    // types in it themselves; after that their text wins
+    var sl = $('[data-ctx="shortlist"]', form);
+    if (sl && !sl.hasAttribute('data-typed')) sl.value = ctx.shortlist.join(', ');
     var list = $('[data-carry-list]', form);
+    if (!list) { bpPaint(); return; }
     list.innerHTML = '';
     ctx.shortlist.forEach(function (u) {
       var b = document.createElement('button');
@@ -1227,21 +1510,30 @@
         if (hasGsap && !reduce) G.fromTo(fl, { x: -8 }, { x: 0, duration: 0.5, ease: 'elastic.out(1, .3)' });
       }
     }
-    $$('input', form).forEach(function (i) { i.addEventListener('input', function () { var fl = i.closest('.fl'); if (fl) fl.classList.remove('is-invalid'); }); });
+    $$('input, textarea', form).forEach(function (i) { i.addEventListener('input', function () { var fl = i.closest('.fl'); if (fl) fl.classList.remove('is-invalid'); }); });
+    var slField = $('#f-short', form);
+    if (slField) slField.addEventListener('input', function () { slField.setAttribute('data-typed', ''); });
+    form.addEventListener('reset', function () { if (slField) slField.removeAttribute('data-typed'); });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      if (wiz && wiz.step === 1) { wiz.go(2); if (fine) wiz.focus(); return; }
+      if (wiz && wiz.step === 1) { $('[data-wiz-next]', form).click(); return; }
       err.classList.remove('is-on');
-      var name = $('#f-name'), phone = $('#f-phone'), email = $('#f-email'), interest = $('#f-interest');
-      if (name.value.trim().length < 2) return fail('Enter your full name so your counsellor knows who to ask for.', name);
-      if (!/^[0-9]{7,15}$/.test(phone.value.replace(/\D/g, ''))) return fail('Enter a phone number with 7 to 15 digits.', phone);
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) return fail('Enter an email address like you@example.com.', email);
-      $('[data-destination]', form).value = interest.value === 'General UK Inquiry' ? 'General UK Inquiry' : 'UK – ' + interest.value;
-      var data = {};
-      new FormData(form).forEach(function (v, k) { if (v !== '') data[k] = v; });
-      data.phone = (data.country_code || '') + ' ' + (data.phone_number || '');
-      delete data.country_code; delete data.phone_number; delete data.interest;
-      data.page = enquiryPage();
+      var name = $('#f-name'), phone = $('#f-phone'), email = $('#f-email');
+      // step 1 was checked before Continue; re-check in case it was edited via Back
+      if (verify && (!checkName(name.value).ok || !checkPhone($('#f-code', form).value, phone.value).ok || !checkEmail(email.value).ok)) { wiz.go(1); verify.step1(); return; }
+      function val(sel) { var el = $(sel, form); return el ? el.value.trim() : ''; }
+      // The server stamps the time and the source page itself; these are
+      // just what the visitor typed.
+      var data = {
+        full_name: name.value.trim(),
+        phone: verify ? verify.phone() : (val('#f-code') + ' ' + phone.value.trim()).trim(),
+        email: email.value.trim(),
+        state: val('#f-state'),
+        notes: val('#f-notes'),
+        shortlist: val('#f-short'),
+        page_url: enquiryPage(),
+        botcheck: $('[name="botcheck"]', form).checked ? '1' : ''
+      };
       btn.disabled = true; btn.innerHTML = '<span>Submitting…</span>';
       fetch(ENQUIRY_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) })
         .then(function (r) { return r.json().catch(function () { return { success: false }; }); })
@@ -1257,7 +1549,7 @@
         .catch(function () { fail('Your details were not sent because the connection dropped. Check your internet and try again.'); })
         .then(function () { btn.disabled = false; btn.innerHTML = btnHTML; });
     });
-    $('[data-form-again]', form).addEventListener('click', function () { done.hidden = true; body.hidden = false; if (wiz) wiz.go(1, true); renderCarry(); if (wiz) wiz.focus(); });
+    $('[data-form-again]', form).addEventListener('click', function () { if (verify) verify.reset(); done.hidden = true; body.hidden = false; if (wiz) wiz.go(1, true); renderCarry(); if (wiz) wiz.focus(); });
     // shortlist + topic handed over from universities.html (see handOffToHome)
     var hand = null;
     try { hand = JSON.parse(localStorage.getItem(HANDOFF) || 'null'); localStorage.removeItem(HANDOFF); } catch (e2) { /* storage unavailable */ }
@@ -1675,6 +1967,94 @@
     }, { rootMargin: '120px 0px' });
     $$('[data-section], .velocity, .site-footer').forEach(function (el) { io.observe(el); });
   }
+  /* Live UK study news (GET /api/news). Fetched when the strip is about to
+     scroll into view; cards are built with textContent (feed text is never
+     parsed as HTML). If the feed is unreachable the strip removes itself. */
+  function initNews() {
+    var sec = $('[data-news]');
+    if (!sec) return;
+    var list = $('[data-news-list]', sec), meta = $('[data-news-meta]', sec), done = false;
+    var rtf = window.Intl && Intl.RelativeTimeFormat ? new Intl.RelativeTimeFormat('en', { numeric: 'auto' }) : null;
+    function ago(iso) {
+      var s = (Date.now() - new Date(iso).getTime()) / 1000;
+      if (!rtf || isNaN(s)) return '';
+      if (s < 3600) return rtf.format(-Math.max(1, Math.round(s / 60)), 'minute');
+      if (s < 86400) return rtf.format(-Math.round(s / 3600), 'hour');
+      return rtf.format(-Math.round(s / 86400), 'day');
+    }
+    function el(tagName, cls, txt) { var e = document.createElement(tagName); if (cls) e.className = cls; if (txt) e.textContent = txt; return e; }
+    function render(items) {
+      list.textContent = '';
+      items.slice(0, 6).forEach(function (n) {
+        if (!/^https:\/\//.test(n.link)) return;
+        var a = el('a', 'news-card'); a.href = n.link; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        var fig = el('span', 'news-img'), img = document.createElement('img');
+        // built ~800px before the strip scrolls in, so fetch + decode right away
+        // (decoding at first paint caused a visible hitch)
+        img.src = n.image; img.alt = ''; img.decoding = 'async'; img.width = 240; img.height = 200;
+        if (img.decode) img.decode().catch(function () {});
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', function () { fig.classList.add('is-broken'); });
+        fig.appendChild(img);
+        var body = el('span', 'news-body');
+        var src = el('span', 'news-src', n.source + (n.date ? ' · ' + ago(n.date) : ''));
+        body.appendChild(src);
+        body.appendChild(el('b', 'news-h', n.title));
+        if (n.summary) body.appendChild(el('span', 'news-sum', n.summary));
+        a.appendChild(fig); a.appendChild(body);
+        a.setAttribute('aria-label', n.title + ' — ' + n.source + ' (opens in a new tab)');
+        list.appendChild(a);
+      });
+      list.removeAttribute('aria-busy');
+    }
+    // live feed first; the bundled snapshot (tools/refresh-news.mjs) if the
+    // function isn't there (local preview) or has nothing
+    function get(url) {
+      return fetch(url, { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return j && j.items && j.items.length ? j : null; })
+        .catch(function () { return null; });
+    }
+    function load() {
+      if (done) return; done = true;
+      get('/api/news')
+        .then(function (j) { return j || get('./assets/data/news.json'); })
+        .then(function (j) {
+          var items = j && j.items ? j.items.filter(function (n) { return n.title && n.link && n.image; }) : [];
+          if (!items.length) { sec.hidden = true; return; }
+          render(items);
+          if (j.updated && meta) meta.textContent = 'Updated ' + ago(j.updated) + ' · ' + Array.from(new Set(items.map(function (n) { return n.source; }))).join(', ');
+          if (hasGsap) ScrollTrigger.refresh();
+        })
+        .catch(function () { sec.hidden = true; if (hasGsap) ScrollTrigger.refresh(); });
+    }
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { io.disconnect(); load(); } }, { rootMargin: '800px 0px' });
+      io.observe(sec);
+    } else load();
+  }
+  /* Images ahead of the reader: once the page has loaded, any lazy image
+     within ~1.5 screens (and along the sideways services strip) is fetched
+     and decoded off the main thread before it scrolls in. Decoding at first
+     paint is what caused visible hitches (up to ~400 ms) on first scroll. */
+  function initImageWarmup() {
+    if (!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var im = e.target;
+        io.unobserve(im);
+        im.loading = 'eager';
+        var ready = im.complete ? Promise.resolve() : new Promise(function (r) { im.addEventListener('load', r, { once: true }); im.addEventListener('error', r, { once: true }); });
+        ready.then(function () { if (im.decode && im.naturalWidth) im.decode().catch(function () {}); });
+      });
+    }, { rootMargin: '150% 300% 150% 300%' });
+    $$('img[loading="lazy"]').forEach(function (im) { io.observe(im); });
+    // The services strip is the one place many photos appear at once (as it
+    // pins and slides), so they are
+    // warmed straight away rather than waiting to be within range.
+    $$('.svc-img').forEach(function (im) { io.unobserve(im); im.loading = 'eager'; im.decode && im.decode().catch(function () {}); });
+  }
   /* small jobs run between frames, ~8 ms at a time */
   var idleQ = [];
   function idle(fn) { idleQ.push(fn); if (idleQ.length === 1) yieldThen(runIdle); }
@@ -1701,23 +2081,26 @@
     initMenu();
     initGoto();
     initForm();
+    initVerify();
     initRotator();
     initTour();
     initSections();
     heroEntrance();
     // phase 2 — below-the-fold features, after the first frame, one per task
     // (anything that builds DOM a scroll effect animates must run before initScrollFx)
-    var later = [initPointer, initVelocity, initMap, initStories, initFaq, initGrants, initServicePanel, initScrollFx, initChat, initSparks];
+    // how long each deferred setup step takes (read window.__tcBoot when profiling)
+    var bootTimes = window.__tcBoot = [];
+    var later = [initPointer, initVelocity, initMap, initNews, initStories, initFaq, initGrants, initServicePanel, initScrollFx, initChat, initSparks];
     function next() {
       var fn = later.shift();
-      if (fn) { fn(); yieldThen(next); return; }
+      if (fn) { var t0 = performance.now(); fn(); bootTimes.push([fn.name, Math.round(performance.now() - t0)]); yieldThen(next); return; }
       if (hasGsap) ScrollTrigger.refresh();
       if (location.hash === '#contact') arriveAtForm();
     }
     requestAnimationFrame(function () { setTimeout(next, 0); });
     // shared hooks for universities.html (directory shortlist feeds the same form)
     window.TC = { ctx: ctx, renderCarry: renderCarry, goToForm: goToForm, setInterest: setInterest, reduce: reduce, hasGsap: hasGsap, lenis: lenis, openUni: openUni, setShort: setShort, isShort: isShort, onShortlist: onShortlist };
-    window.addEventListener('load', function () { if (hasGsap) ScrollTrigger.refresh(); });
+    window.addEventListener('load', function () { if (hasGsap) ScrollTrigger.refresh(); idle(initImageWarmup); });
     if (document.fonts && document.fonts.ready && hasGsap) document.fonts.ready.then(function () { ScrollTrigger.refresh(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

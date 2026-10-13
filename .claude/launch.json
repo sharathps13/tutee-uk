@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "site", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8781"], "port": 8781 }
+    { "name": "site", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8781"], "port": 8781 },
+    { "name": "site-nocache", "runtimeExecutable": "python", "runtimeArgs": ["-c", "import sys, webbrowser; sys.argv=['serve.py','8782']; webbrowser.open=lambda *a, **k: None; __file__='serve.py'; exec(open('serve.py', encoding='utf-8').read())"], "port": 8782 }
   ]
 }

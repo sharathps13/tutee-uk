@@ -40,7 +40,7 @@
       default-src 'self'; \
       script-src 'self'; \
       style-src 'self' 'unsafe-inline'; \
-      img-src 'self' data:; \
+      img-src 'self' data: https://flagcdn.com https://i.guim.co.uk https://ichef.bbci.co.uk https://thepienews.b-cdn.net https://monitor.icef.com; \
       font-src 'self'; \
       connect-src 'self' https://*.supabase.co; \
       form-action 'self'; \

@@ -29,6 +29,7 @@
     var data = (window.TC_pendingUniversities || window.UK_UNIVERSITIES || []).slice();
     var state = { q: '', nation: 'all', type: 'all', sort: 'rank', shown: PAGE };
     var cache = {};
+    var collate = window.Intl && Intl.Collator ? new Intl.Collator('en').compare : function (a, b) { return a < b ? -1 : a > b ? 1 : 0; };
     var count = $('[data-dir-count]'), progress = $('[data-dir-progress]'), more = $('[data-dir-more]'), empty = $('[data-dir-empty]');
     var tray = $('[data-sl-tray]'), trayN = $('[data-sl-n]'), trayNames = $('[data-sl-names]');
 
@@ -64,11 +65,16 @@
         if (e.target.closest('.uni-heart') || !TC.openUni) return;
         TC.openUni(u, $('.uni-more-btn', el));
       });
+      // spotlight: measure the card once on enter, not on every move (a read
+      // after the previous move's style write forced a layout per event)
+      var box = null;
+      el.addEventListener('pointerenter', function () { box = el.getBoundingClientRect(); });
       el.addEventListener('pointermove', function (e) {
-        var r = el.getBoundingClientRect();
-        el.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-        el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+        if (!box) box = el.getBoundingClientRect();
+        el.style.setProperty('--mx', (e.clientX - box.left) + 'px');
+        el.style.setProperty('--my', (e.clientY - box.top) + 'px');
       });
+      el.addEventListener('pointerleave', function () { box = null; });
       cache[u.id] = el;
       return el;
     }
@@ -103,29 +109,43 @@
         if (q && (u.name + ' ' + u.location + ' ' + (u.programs || '') + ' ' + u.type).toLowerCase().indexOf(q) === -1) return false;
         return true;
       });
-      if (state.sort === 'az') list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      // one shared collator: localeCompare builds a new one per call (slow over 499 rows)
+      if (state.sort === 'az') list.sort(function (a, b) { return collate(a.name, b.name); });
       else list.sort(function (a, b) { return (a.rank || 1e9) - (b.rank || 1e9); });
       return list;
     }
 
-    function render(animate) {
+    /* Rendering. 'more' only appends the next page (nothing on screen moves);
+       a filter/search/sort swap replaces the cards and fades in just the
+       first screenful. Neither measures card positions: the earlier Flip
+       animation did, for every card, and cost 100-750 ms per change. */
+    var rendered = [];
+    function render(mode) {
       var list = matches(), vis = list.slice(0, state.shown);
-      var flipState = animate && canFlip ? Flip.getState(grid.children) : null;
-      var before = {};
-      $$(':scope > .uni-card', grid).forEach(function (c) { before[c.getAttribute('data-flip-id')] = true; });
-      var frag = document.createDocumentFragment();
-      vis.forEach(function (u) { var c = card(u); paintHeart(u.name, $('.uni-heart', c), c); frag.appendChild(c); });
-      grid.replaceChildren(frag);
+      var fresh = [];
+      if (mode === 'more' && rendered.length && vis.slice(0, rendered.length).every(function (u, i) { return u.id === rendered[i]; })) {
+        var frag = document.createDocumentFragment();
+        // only the first row or two of the new page is on screen; animate just those
+        vis.slice(rendered.length).forEach(function (u, k) { var c = card(u); paintHeart(u.name, $('.uni-heart', c), c); frag.appendChild(c); if (k < 8) fresh.push(c); });
+        grid.appendChild(frag);
+      } else {
+        var frag2 = document.createDocumentFragment();
+        vis.forEach(function (u) { var c = card(u); paintHeart(u.name, $('.uni-heart', c), c); frag2.appendChild(c); });
+        grid.replaceChildren(frag2);
+        if (mode) fresh = vis.slice(0, 12).map(function (u) { return cache[u.id]; });
+      }
+      rendered = vis.map(function (u) { return u.id; });
       count.textContent = list.length === data.length ? 'Showing all ' + data.length + ' institutions' : list.length + (list.length === 1 ? ' institution matches' : ' institutions match');
       progress.textContent = 'Showing ' + vis.length + ' of ' + list.length;
       more.hidden = vis.length >= list.length;
       empty.hidden = list.length > 0;
-      if (flipState) {
-        Flip.from(flipState, { duration: 0.6, ease: 'power3.inOut', absolute: false, nested: false, prune: true });
-        var fresh = vis.map(function (u) { return cache[u.id]; }).filter(function (c) { return !before[c.getAttribute('data-flip-id')]; });
-        if (fresh.length) G.fromTo(fresh, { opacity: 0, y: 30, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, stagger: 0.025, ease: 'expo.out', clearProps: 'transform,opacity' });
+      if (fresh.length && G && !TC.reduce) {
+        G.killTweensOf(fresh);
+        G.fromTo(fresh, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.025, ease: 'expo.out', clearProps: 'transform,opacity' });
       }
-      if (TC.hasGsap && window.ScrollTrigger) ScrollTrigger.refresh();
+      // The only scroll effect here is the hero backdrop above the grid, so a
+      // full refresh per render (a forced layout of the whole page) isn't
+      // needed; Lenis notices the new page height on its own.
     }
 
     function chips(sel, key) {
@@ -135,7 +155,7 @@
           state[key] = b.getAttribute('data-val');
           state.shown = PAGE;
           btns.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
-          render(true);
+          render('swap');
         });
       });
       return btns;
@@ -146,30 +166,37 @@
     var qInput = $('[data-dir-q]'), sortSel = $('[data-dir-sort]'), t = 0;
     qInput.addEventListener('input', function () {
       clearTimeout(t);
-      t = setTimeout(function () { state.q = qInput.value.trim(); state.shown = PAGE; render(true); }, 140);
+      t = setTimeout(function () { state.q = qInput.value.trim(); state.shown = PAGE; render('swap'); }, 140);
     });
     $('[data-dir-search-form]').addEventListener('submit', function (e) {
       e.preventDefault();
-      state.q = qInput.value.trim(); state.shown = PAGE; render(true);
+      state.q = qInput.value.trim(); state.shown = PAGE; render('swap');
       var target = $('#directory');
       if (TC.lenis) TC.lenis.scrollTo(target, { offset: -140 }); else target.scrollIntoView({ behavior: TC.reduce ? 'auto' : 'smooth' });
     });
-    sortSel.addEventListener('change', function () { state.sort = sortSel.value; render(true); });
-    $('[data-dir-load]').addEventListener('click', function () { state.shown += PAGE; render(true); });
+    sortSel.addEventListener('change', function () { state.sort = sortSel.value; render('swap'); });
+    $('[data-dir-load]').addEventListener('click', function () { state.shown += PAGE; render('more'); });
     $('[data-dir-reset]').addEventListener('click', function () {
       state = { q: '', nation: 'all', type: 'all', sort: state.sort, shown: PAGE };
       qInput.value = '';
       [nationBtns, typeBtns].forEach(function (bs) { bs.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-val') === 'all' ? 'true' : 'false'); }); });
-      render(true);
+      render('swap');
     });
 
     // ?q=… deep link (e.g. from the home page map)
     try { var q0 = new URLSearchParams(location.search).get('q'); if (q0) { qInput.value = q0; state.q = q0; } } catch (e) { /* old browser */ }
 
     // Supabase may deliver a fresher dataset later.
+    // Usually identical to the bundled copy, so compare first; when it does
+    // differ, swap it in at an idle moment rather than mid-scroll.
+    function sig(list) { return list.map(function (u) { return [u.id, u.name, u.rank, u.type, u.location, u.programs].join('\u0001'); }).join('\u0002'); }
+    var dataSig = sig(data);
     window.TC_applyUniversities = function (rows) {
       if (!rows || !rows.length) return;
-      data = rows.slice(); cache = {}; stats(); render(false);
+      var next = sig(rows);
+      if (next === dataSig) return;
+      var apply = function () { data = rows.slice(); dataSig = next; cache = {}; stats(); render(false); warm(); };
+      if (window.requestIdleCallback) requestIdleCallback(apply, { timeout: 2000 }); else setTimeout(apply, 200);
     };
 
     // Hero background drifts slowly.
@@ -180,6 +207,16 @@
 
     stats();
     render(false);
+    // Build the remaining cards a few at a time while the page is idle, so
+    // "Load more", filters and sorting only place existing elements.
+    function warm() {
+      var queue = data.slice(), idle = window.requestIdleCallback || function (fn) { return setTimeout(function () { fn({ timeRemaining: function () { return 8; } }); }, 50); };
+      idle(function step(dl) {
+        while (queue.length && dl.timeRemaining() > 2) card(queue.shift());
+        if (queue.length) idle(step);
+      });
+    }
+    warm();
     if (canFlip) G.from($$(':scope > .uni-card', grid), { opacity: 0, y: 40, stagger: 0.03, duration: 0.8, ease: 'expo.out', delay: 0.3, clearProps: 'transform,opacity' });
     paintTray(false);
   }
