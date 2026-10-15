@@ -5,6 +5,9 @@
 .netlify/
 node_modules/
 
+# browser-automation output (Playwright MCP snapshots, screenshots, console logs)
+.playwright-mcp/
+
 # working files that are not part of the deployed site
 _legacy/
 scratch/
@@ -14,3 +17,6 @@ _v.html
 _vu.html
 _sheet*.html
 _navtest.html
+# local lead-pipeline test server output (tools/dev/serve-with-api.mjs)
+tools/dev/mock-leads.jsonl
+tools/dev/mock-fail.flag

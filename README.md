@@ -3,7 +3,102 @@
 A static rebuild of the USA landing page (https://pageus.netlify.app/#/) for the UK market.
 Same layout, same Tailwind classes, same animations — UK content.
 
-## October 2026 redesign of `index.html`
+## "The Atlas": the current home page (15 October 2026)
+
+`index.html` was rebuilt from scratch as an editorial atlas of the visitor's own route to a UK
+university. It replaces "The Flight" (dark teal night, amber, departures board, 2D globe), which
+is backed up in `_legacy/flight-2026-10-15/`.
+
+### Three directions considered
+
+| | A. The Atlas (chosen) | B. Letter of Offer | C. Campus at Dusk |
+|---|---|---|---|
+| Idea | A paper relief model of the UK on a chalk table; the visitor's route is a red thread that arrives from the south-east and climbs a staircase to settlement | The page as an admissions dossier: an envelope opens, documents (offer, CAS, visa, eVisa) stack and flip in 3D | A walkable low-poly British campus at twilight; each building houses a service |
+| Colour | Chalk paper, Oxford-navy ink, one signal red, brass markers | Ivory and maroon ink, gold foil | Indigo night, sodium-lamp gold |
+| Composition | Asymmetric text column beside a persistent 3D world; editorial ledgers and indexes, not card grids | Centred document stacks, typographic letterheads | Full-screen scene, HUD overlays |
+| Interaction | Scroll moves one camera; steps, cities, nations, services, visas and stories light their place on the map | Scroll flips pages | Free exploration |
+| Risk | Light 3D must stay legible: solved with a paper wash behind the text column and on-demand rendering | Bureaucratic feel adds to visa anxiety | Game-like, heavy on phones, purple-blue cliché |
+
+**Why A:** it explains the product (a route from your city to a UK degree and beyond) in the
+first screen, carries every chapter with one object instead of decoration, is cheap enough for
+phones (one scene, rendered only when something changes), and is the most different from the
+previous dark design (light ground, new type voice, new composition, new interaction model).
+
+### Identity
+
+- **Colour tokens** (`assets/css/atlas.css` `:root`): chalk `#f3efe6`, chalk-2 `#e9e3d6`, paper
+  `#fcfaf5`, ink `#0f1b2d`, ink-2 `#3a4558`, ink-3 `#5a6373`, night `#0e1828` (funding and footer),
+  red `#c62a1f` (action and the route; white text 5.6:1), red-2 `#a5211a` (red text, 6.9:1 on chalk),
+  red-on-night `#ff8f84`, brass `#b9842a` (markers), brass-ink `#855c16`, ok `#2c6a4c`, err `#b42318`,
+  focus `#2350b8` (light) / `#9db8ff` (dark). The 3D materials use the same values.
+- **Type:** Bricolage Grotesque at weight 300 for display with the payoff set at 720
+  ("Plot your route to a **UK university.**"); Plus Jakarta Sans for text; small tracked capitals
+  for labels. Quicksand is no longer used.
+- **Shape:** crisp 2–8 px radii, hairline rules, ledgers and indexes instead of rounded cards.
+
+### Chapters
+
+| # | Section | Composition | In the 3D world |
+|---|---|---|---|
+| — | Start `#home` | Headline left, map legend (Admissions, Student visa, Funding, Settlement) | The UK relief model |
+| 01 | The hard parts `#worries` | Sticky heading, four large statements each answered by a service | (solid chapter; world paused) |
+| 02 | Your route `#journey` | Eight step cards on a timeline | The red thread draws to the step being read; its waypoint lights |
+| 03 | Why the UK `#why-uk` | Text right; figures ledger; four-nation tabs with photographs | The chosen nation rises and tints |
+| 04 | Universities `#universities` (`#welcome` inside) | City chips, list, details sheet, shortlist | Brass pins; clicking a pin label selects the city |
+| 05 | What we do `#services` | Numbered index, Read more | The steps each service supports light up |
+| 06 | Funding `#scholarships`, `#financial-aid` | Night ledger spread, lender logo wall | (solid chapter) |
+| 07 | Settle `#relocate` | Four visas as a ledger; family panel | The staircase: Student visa → Graduate Route → Skilled Worker → ILR |
+| 08 | Stories `#testimonials` | Postcards, text right | Each card lights its city |
+| — | News, Questions `#uk-news`, `#faq` | Feed row; sticky FAQ | (solid) |
+| 10 | Free evaluation `#contact` | Perks + contact options; route ticket + two-step form | Camera pulls back to the whole route |
+
+Every word is in the HTML. `html.world-on` (decided before first paint in `flag.js`) switches the
+layout to its two-column form; if WebGL is missing, the bundle fails, the context is lost, the
+device is low-memory or Save-Data is on, the page uses its 2D layout (still poster in the hero,
+SVG map in Universities). Reduced motion: no Lenis, the camera cuts instead of gliding.
+Test the fallback with `index.html?noworld`.
+
+### Files
+
+```
+index.html                 markup (all ids, form fields and data-* hooks landing.js needs)
+assets/css/atlas.css       the whole Atlas stylesheet: tokens, chapters, generated components
+assets/js/atlas.js         presentation: scroll → camera, chapter links, Read more, nation tabs,
+                           contents focus trap, dataLayer events (no analytics is loaded)
+assets/js/world.js         the 3D world, built from tools/world (three.js r186), ~150 KB gzip,
+                           loaded after the page is idle
+assets/js/landing.js       functional core, unchanged in behaviour (only confetti colours)
+assets/js/flag.js          + the world-on decision before first paint
+assets/img/atlas/          hero posters (stills rendered from the world itself)
+assets/css/atlas-directory.css  maps universities.html onto the Atlas tokens and type
+tools/world/               dev-only build: src/world.js, src/geo.js, build.mjs, preview.html
+```
+
+Rebuild the world after editing `tools/world/src`: `cd tools/world && npm install && npm run build`.
+`tools/` (including `node_modules`) is not needed on the server; exclude it from deploy uploads.
+
+### Tested (15 October 2026)
+
+Playwright (headless Chrome) and Chrome DevTools against a local server that runs the real
+`netlify/functions/enquiry.mjs` with a local mock Apps Script (no production lead created):
+- Form: empty/invalid errors, phone length, email typo suggestion, step 2, shortlist carried from
+  the map, success only after the server confirms, honest error with input kept when the upstream
+  fails, one request on double-click; server rejects bad names, honeypot and dead mail domains.
+- Lighthouse (accessibility / best practices / SEO): home 100/100/100 on desktop and mobile;
+  universities.html 100/96/100 on mobile (the 96 is the existing Supabase DNS failure, which
+  falls back to the bundled data).
+- Keyboard: skip link first, Contents opens/closes with focus moved and returned and Tab trapped,
+  nation tabs with arrow keys, visible 3px focus ring; Tutee AI answers from page content.
+- Performance: LCP 318 ms desktop; 1.9 s on a phone at 4× CPU + Slow 4G (gzip); CLS 0.00;
+  scrolling all 3D chapters p95 10.2 ms (1×) and 29.9 ms (4× CPU) on integrated AMD graphics.
+- Fallbacks forced: bundle blocked, WebGL unavailable, `?noworld`, reduced motion.
+- Viewports: 360, 390, 768, 844×390, 1024, 1280, 1440, 1920, 2560×1080; no horizontal overflow.
+
+## "The Flight" (15 October 2026, superseded by the Atlas; backup in `_legacy/flight-2026-10-15/`)
+
+A dark night-to-dawn journey with a departures board, a Canvas 2D globe and pinned chapters.
+
+## Earlier October 2026 redesign of `index.html` (superseded; kept for history)
 
 The home page was rebuilt from scratch as a lead-generation page. All copy from the previous
 version is kept; the original markup is backed up at `_legacy/index.original.html` (git-ignored).

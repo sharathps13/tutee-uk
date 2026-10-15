@@ -1,0 +1,7 @@
+﻿{
+  "name": "tutee-uk-world",
+  "private": true,
+  "description": "Build step for the home page's 3D scene only: bundles assets/js/world source with the parts of three.js it uses into assets/js/world.js",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": { "three": "0.186.1", "esbuild": "0.28.2" }
+}

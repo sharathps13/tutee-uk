@@ -53,13 +53,37 @@
     if (!hasGsap || !window.Lenis || reduce) return;
     lenis = new window.Lenis({ lerp: 0.1, wheelMultiplier: 1, smoothWheel: true });
     lenis.on('scroll', ScrollTrigger.update);
+    // pinned sections change the page height after load; Lenis must re-measure or it
+    // clamps scrolling to the old length (jumps to #contact landed ~2,000px short)
+    ScrollTrigger.addEventListener('refresh', function () { if (lenis && lenis.resize) lenis.resize(); });
     G.ticker.add(function (t) { lenis.raf(t * 1000); });
     G.ticker.lagSmoothing(0);
   }
   function scrollToEl(el, offset) {
     if (!el) return;
     var off = offset === undefined ? -70 : offset;
-    if (lenis) lenis.scrollTo(el, { offset: off, duration: 1.4 });
+    if (lenis && lenis.resize) lenis.resize();
+    var target = el.getBoundingClientRect().top + window.pageYOffset + off;
+    var dist = target - window.pageYOffset, vh = window.innerHeight;
+    // A smooth scroll all the way. Long trips (e.g. a "free consultation"
+    // button to the form) get a little more time (up to ~2s) and an
+    // ease-in-out curve, so the page accelerates away and settles gently;
+    // Lenis has just re-measured the page, so it lands exactly on target.
+    var far = Math.abs(dist) / vh;
+    var dur = far > 2.5 ? Math.min(2.2, 1.2 + far * 0.08) : 1.2;
+    function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+    var opts = { offset: off, duration: dur, force: true };
+    if (far > 2.5) opts.easing = easeInOut;
+    // sections revealed on the way can nudge the layout; settle onto the
+    // target's final position with a short glide at the end
+    opts.onComplete = function () {
+      if (lenis) lenis.resize();
+      // Lenis also honours scroll-padding-top (the fixed header allowance)
+      var pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+      var miss = el.getBoundingClientRect().top - (pad - off);
+      if (Math.abs(miss) > 4 && lenis) lenis.scrollTo(el, { offset: off, duration: 0.45, force: true });
+    };
+    if (lenis) lenis.scrollTo(el, opts);
     else el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   }
   function lockScroll(on) {
@@ -94,27 +118,29 @@
     var held = root.classList.contains('hero-wait');
     if (!hasGsap || reduce || !held) { root.classList.remove('hero-wait'); hero.classList.add('is-ready'); return; }
     // Tight on purpose: every piece of the hero is readable within ~0.6 s.
-    var tl = G.timeline({ defaults: { ease: 'expo.out' }, onStart: function () { hero.classList.add('is-ready'); } });
+    // Gentle on purpose: soft easing and a calm stagger (the earlier quick
+    // version read as abrupt). The headline is readable within ~1s.
+    var tl = G.timeline({ defaults: { ease: 'power3.out' }, delay: 0.05, onStart: function () { hero.classList.add('is-ready'); } });
     var phone = window.innerWidth <= 760;
     var titles = $$('[data-hero-title]');
     if (titles.length && window.SplitText) {
       // words rise out of their masks
       var words = [];
       titles.forEach(function (t) { words = words.concat(SplitText.create(t, { type: 'words', mask: 'words', aria: 'auto' }).words); });
-      tl.from(words, { yPercent: 115, duration: 1, stagger: 0.04, ease: 'expo.out' }, 0.05);
+      tl.from(words, { yPercent: 110, opacity: 0, duration: 1.3, stagger: 0.07, ease: 'power4.out' }, 0.1);
     }
     // front card first, so the main photo lands earliest
-    tl.from('.dc', { y: 90, rotate: 0, opacity: 0, duration: 1, stagger: { each: 0.07, from: 'start' }, ease: 'expo.out', clearProps: 'transform,opacity' }, 0.1);
-    tl.from('[data-hero-in]', { y: 18, opacity: 0, duration: 0.9, stagger: 0.07 }, 0.25);
+    tl.from('.dc', { y: 70, rotate: 0, opacity: 0, duration: 1.4, stagger: { each: 0.12, from: 'start' }, ease: 'power3.out', clearProps: 'transform,opacity' }, 0.2);
+    tl.from('[data-hero-in]', { y: 16, opacity: 0, duration: 1.2, stagger: 0.12 }, 0.45);
     var sub = $('[data-blur-in]');
     if (sub && window.SplitText) {
       // after React Bits BlurText
       var s2 = SplitText.create(sub, { type: 'words', aria: 'auto' });
       // the blur filter is costly per word on phones, so they get a plain fade
-      tl.from(s2.words, phone ? { opacity: 0, y: 8, duration: 0.6, stagger: 0.01, ease: 'power2.out' } : { filter: 'blur(8px)', opacity: 0, y: 10, duration: 0.7, stagger: 0.01, ease: 'power2.out', clearProps: 'filter' }, 0.35);
+      tl.from(s2.words, phone ? { opacity: 0, y: 8, duration: 0.9, stagger: 0.015, ease: 'power2.out' } : { filter: 'blur(6px)', opacity: 0, y: 8, duration: 1, stagger: 0.015, ease: 'power2.out', clearProps: 'filter' }, 0.6);
     }
     var img = $('[data-hero-img]');
-    if (img) tl.from(img, { scale: 1.12, duration: 2.2, ease: 'power3.out' }, 0);
+    if (img) tl.from(img, { scale: 1.08, opacity: 0, duration: 1.8, ease: 'power2.out' }, 0);
     // every from-state above is already applied, so the copy can show now
     root.classList.remove('hero-wait');
   }
@@ -240,7 +266,8 @@
         el.style.setProperty('--my', (e.clientY - r.top) + 'px');
       });
     });
-    if (!fine || reduce || !hasGsap) return;
+    // the custom cursor only exists on pages that include its markup
+    if (!fine || reduce || !hasGsap || !$('[data-cursor]')) return;
     root.classList.add('has-cursor');
     var heroImg = $('[data-hero-img]');
     if (heroImg) {
@@ -376,6 +403,33 @@
   /* ================================================================= *
    * Scroll choreography (gsap.matchMedia so it adapts per device).
    * ================================================================= */
+  /* What we do (desktop): Back / Skip let visitors leave the pinned
+     sideways section without scrolling through all nine cards. svcPin is
+     the pinning tween, set (and cleared) by initScrollFx. */
+  var svcPin = null;
+  function initServiceSkip() {
+    var sec = $('[data-services]');
+    if (!sec) return;
+    function st() { return svcPin && svcPin.scrollTrigger; }
+    // a quick ease-in-out glide (the cards fast-forward past) rather than a cut
+    function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+    function go(y) {
+      if (lenis) { lenis.resize(); lenis.scrollTo(y, { duration: reduce ? 0 : 1.3, easing: ease, force: true, lock: true }); }
+      else window.scrollTo({ top: y, behavior: reduce ? 'auto' : 'smooth' });
+    }
+    $('[data-svc-back]', sec).addEventListener('click', function () {
+      var t = st();
+      go(t ? Math.max(0, t.start - window.innerHeight * 0.85) : sec.getBoundingClientRect().top + window.pageYOffset - window.innerHeight * 0.85);
+    });
+    $('[data-svc-next]', sec).addEventListener('click', function () {
+      // the section after the pin (its spacer when pinned)
+      var box = sec.parentElement && sec.parentElement.classList.contains('pin-spacer') ? sec.parentElement : sec;
+      var next = box.nextElementSibling;
+      while (next && !next.offsetHeight) next = next.nextElementSibling;
+      var t = st();
+      go(next ? next.getBoundingClientRect().top + window.pageYOffset - 70 : (t ? t.end + 1 : 0));
+    });
+  }
   function initScrollFx() {
     if (!hasGsap) return;
     var mm = G.matchMedia();
@@ -425,7 +479,7 @@
       if (svcSec && big) {
         svcSec.classList.add('is-hpin');
         var dist = function () { return Math.max(0, track.scrollWidth - window.innerWidth); };
-        G.to(track, {
+        svcPin = G.to(track, {
           x: function () { return -dist(); }, ease: 'none',
           scrollTrigger: {
             trigger: svcSec, start: 'top top', end: function () { return '+=' + dist(); }, pin: true, scrub: 1, invalidateOnRefresh: true, anticipatePin: 1,
@@ -505,11 +559,13 @@
         if (window.SplitText) {
           $$('[data-scroll-reveal]').forEach(function (p) { later(function () {
             var s = SplitText.create(p, { type: 'words', aria: 'auto' });
-            var from = { opacity: 0.3 }, to = { opacity: 1 };
-            to.stagger = 0.06; to.ease = 'none';
-            // finishes while the paragraph is still low on screen, so it is never left dim mid-read
-            to.scrollTrigger = { trigger: p, start: 'top 90%', end: window.innerWidth <= 760 ? 'bottom 85%' : 'bottom 65%', scrub: true };
-            G.fromTo(s.words, from, to);
+            // Plays once as the paragraph enters (words light up in sequence over
+            // ~1.4s), so it is fully white long before the section is centred on
+            // any screen height — a scroll-scrubbed version lagged on short screens.
+            var lit = G.fromTo(s.words, { opacity: 0.3 }, { opacity: 1, duration: 0.45, stagger: 0.012, ease: 'power1.out', scrollTrigger: { trigger: p, start: 'top 100%', once: true } });
+            // guarantee: once the section is centred, every word is fully white
+            var secEl = p.closest('section') || p;
+            ScrollTrigger.create({ trigger: secEl, start: 'center 58%', once: true, onEnter: function () { lit.progress(1); } });
           }); });
         }
       });
@@ -541,7 +597,7 @@
 
       idle(function () { if (alive) ScrollTrigger.refresh(); });
 
-      return function () { alive = false; if (svcSec) svcSec.classList.remove('is-hpin'); };
+      return function () { alive = false; svcPin = null; if (svcSec) svcSec.classList.remove('is-hpin'); };
     });
   }
 
@@ -630,7 +686,7 @@
   function confetti(canvas) {
     if (!canvas || reduce) return;
     var c = canvas.getContext('2d'), w = canvas.width = canvas.offsetWidth, h = canvas.height = canvas.offsetHeight;
-    var cols = ['#f5a524', '#8e1b1b', '#14706a', '#ffcb6b', '#0e2422'], parts = [];
+    var cols = ['#c62a1f', '#0f1b2d', '#b9842a', '#e9b3aa', '#2c6a4c'], parts = [];
     for (var i = 0; i < 110; i++) parts.push({ x: w / 2, y: h / 3, vx: (Math.random() - .5) * 13, vy: Math.random() * -11 - 3, s: Math.random() * 6 + 4, r: Math.random() * 6, vr: (Math.random() - .5) * .3, c: cols[i % cols.length] });
     var t = 0;
     (function f() {
@@ -703,7 +759,7 @@
       c.unis.forEach(function (u) {
         var on = isShort(u[1]), li = document.createElement('li');
         li.innerHTML = '<span class="uni-rank">#' + u[0] + '</span>' +
-          '<button class="uni-open" type="button" aria-label="Details: ' + esc(u[1]) + '"><span class="uni-name">' + esc(u[1]) + '</span><span class="uni-more">Details <svg class="icon icon-sm"><use href="#i-arrow"/></svg></span></button>' +
+          '<button class="uni-open" type="button"><span class="uni-name">' + esc(u[1]) + '</span><span class="uni-more">Details <svg class="icon icon-sm"><use href="#i-arrow"/></svg></span></button>' +
           '<button class="heart" type="button" aria-pressed="' + on + '" aria-label="Shortlist ' + esc(u[1]) + '"><svg class="icon icon-sm"><use href="#i-heart"/></svg></button>';
         var h = $('.heart', li);
         h._uni = u[1];
@@ -983,7 +1039,8 @@
   }
   var ddOpen = null, ddSeq = 0;
   function initDropdowns() {
-    $$('select:not([data-native])').forEach(enhanceSelect);
+    // data-defer-dd: another script fills the options first, then calls TC.enhanceSelect
+    $$('select:not([data-native]):not([data-defer-dd])').forEach(enhanceSelect);
     window.addEventListener('resize', function () { if (ddOpen) ddOpen.close(false); });
     window.addEventListener('scroll', function () { if (ddOpen) ddOpen.place(true); }, { passive: true });
     document.addEventListener('pointerdown', function (e) { if (ddOpen && !e.target.closest('.dd-panel, .dd-btn')) ddOpen.close(false); });
@@ -1013,12 +1070,18 @@
       label.setAttribute('for', btn.id);
       btn.setAttribute('aria-labelledby', labelId + ' ' + id + '-val');
     } else if (sel.closest('label')) {
-      var lab = sel.closest('label');
-      btn.setAttribute('aria-label', (lab.firstChild && lab.firstChild.textContent.trim()) || 'Choose');
+      // a wrapping <label>: name the button "label text + current value", like the case above,
+      // so the accessible name contains the visible text (WCAG 2.5.3)
+      var lab = sel.closest('label'), first = lab.firstChild;
+      if (first && first.textContent.trim()) {
+        if (first.nodeType === 3) { var lt = document.createElement('span'); lt.textContent = first.textContent; lab.replaceChild(lt, first); first = lt; }
+        first.id = first.id || id + '-lt';
+        btn.setAttribute('aria-labelledby', first.id + ' ' + id + '-val');
+      } else btn.setAttribute('aria-label', 'Choose');
     }
 
     var opts = Array.prototype.slice.call(sel.options);
-    var rich = sel.getAttribute('data-rich') === 'country';
+    var rich = sel.getAttribute('data-rich') === 'country', wide = !!sel.closest('.dir-f');
     if (rich) wrap.classList.add('dd-rich');
     var long = opts.length > 12;
     var hint = rich ? 'Search country or code' : 'Type to search';
@@ -1073,7 +1136,8 @@
       var r = btn.getBoundingClientRect(), vh = window.innerHeight, vw = document.documentElement.clientWidth;
       if (onScroll && (r.bottom < 0 || r.top > vh)) { close(false); return; }
       var below = vh - r.bottom - 12, above = r.top - 12, up = below < 220 && above > below;
-      var w = Math.max(r.width, rich ? Math.min(330, vw - 16) : 230);
+      // country picker and the directory filters have long option names
+      var w = Math.max(r.width, rich || wide ? Math.min(wide ? 340 : 330, vw - 16) : 230);
       panel.style.width = w + 'px';
       panel.style.left = Math.max(8, Math.min(r.left, vw - w - 8)) + 'px';
       panel.style.maxHeight = Math.max(150, Math.min(long ? 340 : 320, up ? above : below)) + 'px';
@@ -1437,7 +1501,11 @@
     var data = { shortlist: ctx.shortlist.slice(), intent: intent || '' }, q = '';
     try { localStorage.setItem(HANDOFF, JSON.stringify(data)); }
     catch (e) { q = '?handoff=' + encodeURIComponent(JSON.stringify(data)); }
-    location.href = './index.html' + q + '#contact';
+    var url = './index.html' + q + '#contact';
+    // fade this page out first; the home page fades in already on the form
+    if (reduce) { location.href = url; return; }
+    root.classList.add('leaving');
+    setTimeout(function () { location.href = url; }, 140);
   }
   function goToForm(intent) {
     if (!$('form[data-lead-form]')) { handOffToHome(intent); return; }
@@ -1447,27 +1515,46 @@
     setTimeout(function () {
       if (hasGsap && !reduce) G.fromTo(card, { scale: 0.97 }, { scale: 1, duration: 0.9, ease: 'elastic.out(1, .5)' });
       if (fine && wiz) wiz.focus();
-    }, reduce ? 0 : 1200);
+    }, reduce ? 0 : 650);
     try { history.replaceState(null, '', '#contact'); } catch (e) { /* file:// */ }
   }
-  /* Arriving with #contact (e.g. from universities.html): land on the form
-     once the layout has settled — images, fonts and pin spacers all change
-     heights after load, which would leave a smooth scroll short of it. */
-  function arriveAtForm() {
-    var target = $('#contact');
+  /* Arriving with a #section in the address (e.g. index.html#contact from
+     another page): land on it and STAY on it while the page finishes
+     setting up. Pinned sections, fonts and images add height for a few
+     seconds after load; a single jump was left up to ~2,000px short. So it
+     re-aligns on every layout refresh until the page settles or the visitor
+     scrolls themselves. Called at the end of start-up. */
+  function arriveAtHash() {
+    var id = location.hash;
+    if (!id || id.length < 2) return;
+    var target = null;
+    try { target = document.querySelector(id); } catch (e) { return; }
     if (!target) return;
+    var off = id === '#contact' ? -40 : -70, done = false, t0 = Date.now();
     function jump() {
-      if (hasGsap) ScrollTrigger.refresh();
-      var y = target.getBoundingClientRect().top + window.pageYOffset - 40;
+      if (done) return;
+      if (lenis && lenis.resize) lenis.resize();
+      var y = target.getBoundingClientRect().top + window.pageYOffset + off;
       if (lenis) lenis.scrollTo(y, { immediate: true, force: true }); else window.scrollTo(0, y);
     }
-    function settle() {
-      jump();
-      setTimeout(jump, 350);
-      if (fine && wiz) setTimeout(function () { wiz.focus(); }, 450);
+    function stop() {
+      if (done) return;
+      done = true;
+      if (hasGsap) ScrollTrigger.removeEventListener('refresh', jump);
+      ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(function (ev) { window.removeEventListener(ev, userMoved, true); });
     }
-    if (document.readyState === 'complete') settle(); else window.addEventListener('load', settle, { once: true });
+    // the visitor taking over ends the re-aligning
+    function userMoved() { if (Date.now() - t0 > 300) stop(); }
+    ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(function (ev) { window.addEventListener(ev, userMoved, { capture: true, passive: true }); });
+    if (hasGsap) { ScrollTrigger.addEventListener('refresh', jump); ScrollTrigger.refresh(); }
+    jump();
+    window.addEventListener('load', function () { setTimeout(jump, 0); }, { once: true });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { setTimeout(jump, 0); });
+    [400, 1000, 2000].forEach(function (ms) { setTimeout(jump, ms); });
+    // the page was kept invisible (flag.js .arriving): show it once it sits on the target
+    setTimeout(function () { jump(); root.classList.remove('arriving'); }, 120);
+    setTimeout(stop, 4000);
+    if (id === '#contact' && fine && wiz) setTimeout(function () { if (!done || Date.now() - t0 < 4100) wiz.focus({ preventScroll: true }); }, 600);
   }
   function initGoto() {
     document.addEventListener('click', function (e) {
@@ -1625,15 +1712,15 @@
       a: 'Our **College Selection** service: based on your interests and previous academics, our process experts suggest the most suitable **courses and universities** across England, Scotland, Wales and Northern Ireland, from 200+ institutions in our network.\n\nWe explain module structures, credit requirements, placement years and post-graduation scope, so you can make the right decision.' },
     { id: 'services', k: 'services service offer offering provide what-we-do end-to-end', sec: '#services',
       a: 'Tutee Connect offers **nine services**, end to end:\n• Career Consultation (the first consultation is free)\n• Language Test — IELTS, PTE and LanguageCert prep\n• College Selection from 200+ UK institutions\n• Documentation — Personal Statements, references, transcripts\n• Student Visa & credibility-interview prep\n• E2E Settlement — Graduate Route, Skilled Worker, ILR\n• Financial Aid — loans and UK scholarships\n• Post-Landing support\n• Family Migration' },
-    { id: 'consult', k: 'consultation free evaluation profile assess eligible eligibility book appointment counsellor advisor route map apply start', sec: '#contact', form: true,
-      a: 'Your **free consultation** includes:\n• **Profile evaluation** — your marks, tests and goals, checked the way UKVI officers look at them\n• **University shortlist** — courses that fit your profile, from our 200+ UK tie-ups\n• **Visa route map** — every step from your CAS to the credibility interview\n• **Funding options** — scholarships, bursaries and education-loan partners\n\nIt\'s free with no obligation — the form takes under a minute.' },
+    { id: 'consult', k: 'consultation free evaluation profile assess eligible eligibility book booking appointment counsellor advisor route map apply start form', sec: '#contact', form: true,
+      a: 'Your **free consultation** includes:\n• **Profile evaluation** — your marks, tests and goals, checked the way UKVI officers look at them\n• **University shortlist** — courses that fit your profile, from our 200+ UK tie-ups\n• **Visa route map** — every step from your CAS to the credibility interview\n• **Funding options** — scholarships, bursaries and education-loan partners\n\nThe form has two short steps: your **name, phone and email**, then (optional) your **state, shortlisted universities and any notes**. It\'s free with no obligation.' },
     { id: 'require', k: 'requirement requirements documents need eligible eligibility admission criteria passport transcripts apply application qualify', sec: '#faq',
       a: 'Generally you need a **valid passport**, strong **academic transcripts**, proof of **English language proficiency** (IELTS, PTE or an accepted equivalent), **academic references** and a compelling **Personal Statement**. Some postgraduate courses — MBAs in particular — may also ask for a **GMAT** score or work experience.' },
     { id: 'visa', k: 'visa student-visa student cas biometrics credibility interview ukvi immigration health surcharge', sec: '#faq',
       a: 'Once you accept an offer, your university issues a **CAS** (Confirmation of Acceptance for Studies). You then apply online for the **Student visa**, pay the visa fee and the Immigration Health Surcharge, show the required funds, and attend a **biometrics** appointment — plus a **credibility interview** if one is requested.\n\nWe guide every step, including one-on-one **mock interviews**, and have a **99% UK Student visa success rate**.' },
     { id: 'refusal', k: 'refusal refused previous reject complicated difficult gap backlog low marks', sec: '#testimonials',
       a: 'Yes — we have successfully managed many **complicated cases**. Every document is reviewed multiple times before submission, and one-on-one **mock credibility interviews** help you explain your goals clearly to UKVI officers. One of our students, Sneha, had a previous visa refusal; her coordinator turned it around and guided her through the whole documentation process successfully.' },
-    { id: 'success', k: 'success rate 99 percent record result track approval chances', sec: '#welcome',
+    { id: 'success', k: 'success rate 99 percent record result track approval chances students helped guided many how-many', sec: '#welcome',
       a: 'Tutee Connect has a **99% UK Student visa success rate**, **200+ UK university tie-ups** and has guided **5,000+ students**. We scrutinise every profile from the view of UKVI officers to choose the right pathway.' },
     { id: 'graduate', k: 'graduate route after graduation graduating post-study stay two years psw', sec: '#relocate',
       a: 'The **Graduate Route** lets you stay and work — or look for work — in the UK for **two years** after your degree (**three years after a PhD**). No sponsor is required, which makes it the ideal bridge into a **Skilled Worker visa**.' },
@@ -1641,8 +1728,8 @@
       a: 'The pathway to settling in the UK has four steps:\n1. **UK Student Visa** — complete your programme (we help you choose courses that lead into the Graduate Route)\n2. **Graduate Route** — two years to work after graduation (three after a PhD), no sponsor\n3. **Skilled Worker visa** — employer-sponsored, for long-term work\n4. **Indefinite Leave to Remain** — after five continuous years on a qualifying work visa' },
     { id: 'family', k: 'family dependant partner children bring relocate spouse together mres phd research', sec: '#relocate',
       a: 'We help **MRes and PhD students** relocate to the UK with their families. Since January 2024 only students on **postgraduate research** courses (PhD or equivalent) or **government-sponsored** courses can bring dependants — a partner and children under 18 — on a Student visa.\n\nOnce you move onto the Graduate Route and then a **Skilled Worker visa**, your partner and children can join you, and Skilled Worker dependants have **full work rights**. We prepare the dependant visa applications, documents and interview prep.' },
-    { id: 'loan', k: 'loan collateral non-collateral bank banks funding finance lender lenders partners emi', sec: '#financial-aid',
-      a: 'We have exclusive tie-ups with reputed national banks and private finance sectors, offering both **collateral and non-collateral education loans**. Loans can cover **tuition fees, accommodation and living expenses**.\n\nLending partners on the page include ICICI Bank, HDFC Credila, IDFC First Bank, InCred, Auxilo, Avanse, Union Bank, Prodigy Finance, Axis Bank and MPOWER Financing — and many more.' },
+    { id: 'loan', k: 'loan collateral non-collateral bank banks funding finance lender lenders partners emi nbfc', sec: '#financial-aid',
+      a: 'We have exclusive tie-ups with reputed national banks and private finance sectors, offering both **collateral and non-collateral education loans**. Loans can cover **tuition fees, accommodation and living expenses**.\n\nLending partners: {LENDERS} — and many more trusted financial partners.' },
     { id: 'scholar', k: 'scholarship grant bursary merit waiver funding aid', sec: '#scholarships',
       a: 'We identify and secure international student **scholarships, departmental grants and bursaries**:\n• **Merit-based scholarships** directly from prestigious UK universities, for strong academic profiles\n• **Full & partial grants** — institutional bursaries and department-specific scholarships that can cover part or all of your tuition\n• **Application support** — winning scholarship essays and the supplementary documents for financial aid' },
     { id: 'cost', k: 'cost tuition living expense afford budget cheap', sec: '#contact', form: true, specific: true,
@@ -1665,18 +1752,34 @@
       a: 'We have **200+ UK university tie-ups**. On the map you can explore top-ranked universities in London, Oxford, Cambridge, Edinburgh, Manchester, Coventry, Bristol, Glasgow and Durham, and the universities page lists **all 499 UK institutions** (24 in the Russell Group) with search and filters.\n\nOpen any university for its details, heart it to shortlist, then apply for a free consultation with your shortlist attached.' },
     { id: 'russell', k: 'russell group', sec: '#universities',
       a: 'The **Russell Group** is a group of **24 leading research-intensive UK universities**. All the top-ranked universities on our map — Oxford, Cambridge, Imperial, UCL, LSE, Edinburgh, King\'s, Manchester, Bristol, Warwick, Glasgow and Durham — are Russell Group members.' },
-    { id: 'intake', k: 'intake january september when start deadline semester session', sec: '#home', specific: true,
-      a: 'You can plan for a **January 2027**, **September 2027** or **2028-or-later** start (or "not sure yet") — pick it in the "Plan your UK journey" bar. Application deadlines differ by university and course, so your counsellor confirms the exact dates for your intake.' },
-    { id: 'levels', k: 'undergraduate bachelor postgraduate master mba phd research level course', sec: '#home',
-      a: 'We guide students for **Undergraduate**, **Master\'s**, **MBA** and **PhD / research** study. Choose your level in the "Plan your UK journey" bar and it\'s carried into your free consultation.' },
+    { id: 'intake', k: 'intake intakes january september may when start starting deadline deadlines semester session admission dates', sec: '#contact', form: true, specific: true,
+      a: 'This page doesn\'t list intake dates or application deadlines — they differ by university and course. Tell us which universities you\'re considering in the free consultation form and your counsellor will confirm the intakes and deadlines that fit your plans.' },
+    { id: 'levels', k: 'undergraduate bachelor bachelors postgraduate master masters mba phd doctorate research level levels degree pursue', sec: '#services',
+      a: 'Yes — we guide students for **Undergraduate**, **Master\'s**, **MBA** and **PhD / research** study in the UK. UK Master\'s degrees are typically **one year**, some MBAs ask for work experience or a **GMAT**, and **PhD / research** students (with MRes students) can also bring their family. Mention your level in the free consultation and your counsellor builds the shortlist around it.' },
     { id: 'contact', k: 'contact phone number call email whatsapp website talk speak reach advisor human office', sec: '.site-footer',
       a: 'You can reach Tutee Connect on:\n• **Call / WhatsApp:** +91 73583 64959\n• **Email:** info@tuteeconnect.com\n• **Website:** www.tuteeconnect.com\n\nWe reply within one working day.' },
     { id: 'office', k: 'office address location visit branch located headquarters walk', sec: '.site-footer',
       a: 'The office address isn\'t listed on this page. Call or WhatsApp **+91 73583 64959** or email **info@tuteeconnect.com** and an advisor will share it — or book a free consultation and we\'ll arrange a meeting.' },
-    { id: 'about', k: 'tutee connect company who are you about experience students guided trust', sec: '#welcome',
+    { id: 'about', k: 'tutee connect company who are you about experience students guided trust helped many help', sec: '#welcome',
       a: '**Tutee Connect** gives study-abroad and immigration advice for students who want to study, work and settle overseas. For the UK: a **99% Student visa success rate**, **200+ UK university tie-ups** and **5,000+ students guided** — one expert team from your first consultation to settlement.' },
     { id: 'reviews', k: 'review reviews testimonial stories feedback experience students say genuine', sec: '#testimonials',
       a: 'A few things our students say:\n• Priya K. (Master\'s, London): her Student visa was approved on the first attempt after credibility-interview prep.\n• Vishal M. (Manchester): the post-landing support for accommodation was "a lifesaver".\n• Rahul V. (Leeds): the non-collateral loan help connected him directly with banking partners.\n• Siddharth J. (PhD, Sheffield): profile building helped him secure a full tuition waiver.' },
+    { id: 'skilled', k: 'skilled worker visa sponsor sponsorship employer work permit', sec: '#relocate',
+      a: 'The **Skilled Worker visa** is an **employer-sponsored** visa for long-term work in the UK — step 3 of the pathway after your Student visa and the Graduate Route. Our team helps you move onto it with the right employer sponsorship, and your partner and children can join you with **full work rights**. After **five continuous years** on a qualifying work visa you can apply for **Indefinite Leave to Remain**.' },
+    { id: 'mock', k: 'mock interview interviews credibility practice prepare preparation question questions', sec: '#services',
+      a: 'Yes — we run rigorous **one-on-one mock credibility interviews** so you can explain your course, university choice, finances and career goals clearly to UKVI officers. Thorough interview preparation is the most important step for avoiding an unnecessary visa refusal.' },
+    { id: 'merit', k: 'merit merit-based academic excellence topper high marks', sec: '#scholarships',
+      a: '**Merit-based scholarships**: we help students with strong academic backgrounds identify and apply for lucrative merit scholarships directly from prestigious UK universities — university merit awards and departmental scholarships, with the deadlines tracked for you.' },
+    { id: 'grants', k: 'full partial grant grants institutional bursary bursaries department-specific cover tuition', sec: '#scholarships',
+      a: '**Full & partial grants**: our experts analyse your profile to match you with **institutional bursaries** and **department-specific scholarships** that can cover **part or all of your tuition**.' },
+    { id: 'essay', k: 'essay essays scholarship application support narrative supplementary paperwork', sec: '#scholarships',
+      a: '**Application support**: building a compelling narrative is key. We help you craft winning **scholarship essays** and prepare the **supplementary documents** and financial-aid paperwork.' },
+    { id: 'processing', k: 'processing time how long take takes waiting duration quick fast decision', sec: '#faq', specific: true,
+      a: 'Visa processing times aren\'t listed on this page — they depend on where and when you apply. What the page covers is the process: after your **CAS**, you apply online, pay the visa fee and the **Immigration Health Surcharge**, show the required funds and attend **biometrics** (plus a credibility interview if requested). Your counsellor gives you the current timeline for your application.' },
+    { id: 'news', k: 'news latest update updates headlines happening recent current', sec: '#uk-news',
+      a: '{NEWS}' },
+    { id: 'directory', k: 'directory filter filters search universities page all 499 institutions find compare', sec: '#universities',
+      a: 'The **universities page** lists **all 499 UK institutions**. You can search by name, city or subject and filter by **course** (15 course areas), **area** (nation or city) and **university type** (Russell Group, Public, Specialist, Private, College), then sort by ranking or A–Z. Open any university for its details and heart it to shortlist.' },
     { id: 'dest', k: 'other countries destinations usa canada australia ireland germany singapore abroad', sec: '.site-footer',
       a: 'Besides the UK, Tutee Connect covers **Singapore, the USA, Canada, Australia, New Zealand, Ireland, Germany, France, Finland, Poland, Malaysia, the UAE and Mauritius** — see "Destinations" at the bottom of the page.' }
   ];
@@ -1684,8 +1787,27 @@
   var SPECIFIC = /\b(how much|cost|fees?|price|amount|charges?|salary|stipend|band|score|marks? required|minimum|cut.?off|deadline|last date|how many hours|hours per week|percentage|gpa|cgpa|interest rate)\b/i;
   var ADVISOR_NOTE = 'For the exact figures for your case, an advisor can confirm them in your free consultation.';
 
+  /* Facts read live from the page, so answers follow the content: the lender
+     logos, the news strip and the footer contacts. */
+  function lenders() {
+    var seen = {}, out = [];
+    $$('.logo-track img').forEach(function (i) { var a = (i.alt || '').trim(); if (a && !seen[a]) { seen[a] = 1; out.push(a); } });
+    return out;
+  }
+  function newsText() {
+    var cards = $$('a.news-card');
+    if (!cards.length) return 'The **UK study news** strip on this page shows the latest headlines about UK universities, international students and visas from sources such as GOV.UK, BBC News and The Guardian. Scroll to it to read the current stories.';
+    return 'Latest **UK study news** on this page:\n' + cards.slice(0, 4).map(function (a) {
+      var h = $('.news-h', a), src = $('.news-src', a);
+      return '• ' + (h ? h.textContent.trim() : '') + (src ? ' — ' + src.textContent.trim() : '');
+    }).join('\n') + '\n\nTap a story in the strip to read it on the source\'s site.';
+  }
   function kbIndex() {
-    KB.forEach(function (e) { e._k = tokens(e.k); e._t = tokens(e.a); });
+    KB.forEach(function (e) {
+      if (!e._tpl) e._tpl = e.a;
+      e.a = e._tpl.replace('{LENDERS}', lenders().join(', ') || 'major Indian banks and NBFCs').replace('{NEWS}', newsText());
+      e._k = tokens(e.k); e._t = tokens(e.a);
+    });
   }
   function scoreKB(qt) {
     return KB.map(function (e) {
@@ -1700,6 +1822,18 @@
   var ALIAS = { lse: 'London School of Economics and Political Science', 'london school of economics': 'London School of Economics and Political Science', ucl: 'University College London', 'university college london': 'University College London', kcl: "King's College London", kings: "King's College London", 'kings college': "King's College London", imperial: 'Imperial College London' };
   // names whose only distinctive word is an ordinary word ('University of Law') must be typed in full
   var COMMON = { law: 1, open: 1, west: 1, east: 1, north: 1, south: 1, central: 1, creative: 1, music: 1, design: 1, business: 1, sport: 1, film: 1, art: 1, drama: 1, health: 1, agriculture: 1, english: 1, global: 1, international: 1, new: 1, metropolitan: 1, buckingham: 0 };
+  var uniLoad = null;
+  function loadUniData() {
+    if (window.UK_UNIVERSITIES && window.UK_UNIVERSITIES.length) return Promise.resolve();
+    if (uniLoad) return uniLoad;
+    uniLoad = new Promise(function (res) {
+      var sc = document.createElement('script');
+      sc.src = './assets/js/universities-data.js';
+      sc.onload = sc.onerror = function () { subjects = null; vocabCache = null; res(); };
+      document.head.appendChild(sc);
+    });
+    return uniLoad;
+  }
   function uniData() {
     if (window.UK_UNIVERSITIES && window.UK_UNIVERSITIES.length) return window.UK_UNIVERSITIES;
     var out = [];
@@ -1781,6 +1915,8 @@
     $$('.faq-item').forEach(function (it) { add($('.faq-t', it).textContent, $('.faq-a p', it).textContent, it); });
     var tpl = $('template[data-svc-data]');
     if (tpl) Array.prototype.forEach.call(tpl.content.children, function (d) { add($('h3', d).textContent, d.textContent.replace($('h3', d).textContent, ''), $('#services')); });
+    // services written straight into the page (home page directory)
+    $$('[data-svc-item]').forEach(function (it) { var n = $('.svc-name', it), t = $('.svc-text', it); if (n && t) add(n.firstChild.textContent, t.textContent, it); });
     $$('.step-card, .why-stat, .gp, .rung, .proof, .family-copy, .loans-grid, .quote, .tilt-card, .perks-row li, .welcome-copy, .hero-copy, .grants-intro, .settle-head, .why-copy').forEach(function (el) {
       var h = $('h2, h3, b', el); add(h ? h.textContent : '', el.textContent, el);
     });
@@ -1813,9 +1949,34 @@
     [/\b(thanks|thank you|thx|great|awesome|cool|ok(ay)?)\b[.!]*$/i, 'You\'re welcome! Anything else you\'d like to know?'],
     [/\b(bye|goodbye|see you)\b/i, 'Good luck with your UK plans! You can come back and ask anything any time.']
   ];
+  function kbById(id) { for (var i = 0; i < KB.length; i++) if (KB[i].id === id) return KB[i]; return null; }
+  function fromKB(id, extra) { var e = kbById(id); return { text: e.a + (extra || ''), sec: e.sec, form: e.form }; }
   function answer(text) {
     var q = text.trim(), qt = tokens(q), specific = SPECIFIC.test(q);
+    kbIndex();   // picks up the live lender list and news headlines
     for (var i = 0; i < SMALL.length; i++) if (SMALL[i][0].test(q) && qt.length <= 3) return { text: SMALL[i][1] };
+    // who / what is Tutee Connect (the brand words are stop-words for search)
+    if (/\b(who|what)\s+(are|r)\s+(you|u)\b|\b(what|who)\s+is\s+tutee|\babout\s+(tutee|your\s+company|you\s+guys)\b|\btutee\s*connect\b\s*\??$/i.test(q)) {
+      return { text: (/\bwho\s+(are|r)\s+(you|u)\b/i.test(q) ? "I'm **Tutee AI**, the assistant for this page — I answer from everything on it.\n\n" : '') + kbById('about').a, sec: '#welcome' };
+    }
+    // a named lending partner: "do you have Tata Capital?"
+    var lend = lenders().filter(function (n) { var key = n.toLowerCase().replace(/\b(bank|loan|finance|financing|first)\b/g, '').trim().split(/\s+/)[0]; return key.length > 2 && new RegExp('\\b' + key.replace(/[^a-z0-9]/g, '') + '\\b', 'i').test(q); });
+    if (lend.length) return { text: 'Yes — **' + lend.join('** and **') + '** ' + (lend.length > 1 ? 'are' : 'is') + ' among our education-loan partners.\n\n' + kbById('loan').a, sec: '#financial-aid' };
+    // counts: "how many universities (in Scotland / are Russell Group)"
+    if (/\bhow many\b.*\b(universit\w*|unis?|institutions?|colleges?)\b/i.test(q) && window.UK_UNIVERSITIES) {
+      var all = window.UK_UNIVERSITIES, pl = findPlace(q), sub = all, label = 'in the UK';
+      if (pl) { sub = unisIn(pl); label = 'in ' + pl.replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+      var rg = /russell/i.test(q);
+      if (rg) { sub = sub.filter(function (u) { return u.type === 'Russell Group'; }); }
+      var byType = {}; sub.forEach(function (u) { byType[u.type] = (byType[u.type] || 0) + 1; });
+      return { text: 'This site lists **' + sub.length + (rg ? ' Russell Group' : '') + ' institutions ' + label + '**' + (rg ? '.' : ':\n' + Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; }).map(function (t) { return '• ' + t + ': ' + byType[t]; }).join('\n')) + '\n\nThe universities page lets you filter them by course, area and type.', more: pl || (rg ? 'Russell Group' : null) };
+    }
+    // study levels: "can I do a PhD / MBA / masters?"
+    if (/\b(can|could)\s+i\s+(do|study|pursue|apply\s+for|get)\b.*\b(phd|mba|master|masters|msc|ma|bachelor|bachelors|undergrad\w*|degree|doctorate)\b|\b(is|are)\s+(an?\s+)?(mba|phd|masters?|undergrad\w*)\b.*\bavailable\b/i.test(q) && !/\b(family|wife|husband|spouse|kids|children|dependants?|after)\b/i.test(q)) return fromKB('levels');
+    if (/\bhow\s+long\b.*\bvisa\b|\bvisa\b.*\b(processing|how\s+long|take)\b/i.test(q)) return fromKB('processing');
+    // settling-in tasks, not loans ('bank' alone would pull the loan answer)
+    if (/\b(bank\s+account|gp|nhs|national\s+insurance|ni\s+number|evisa|brp)\b/i.test(q)) return fromKB('accom');
+    if (/\bafter\s+(my\s+)?(graduation|graduating|degree|studies|course)\b/i.test(q) && !/skilled/i.test(q)) return fromKB('graduate');
     // "universities in <place>" (checked first: "in Oxford" is a place, not the university)
     var place = findPlace(q);
     if (place && /\b(universities|unis|colleges|institutions|options)\b|\b(univ\w*|colleges?)\s+(in|near|at|around)\b/i.test(q)) {
@@ -1834,7 +1995,7 @@
       return ua;
     }
     // "best universities for <subject>"
-    var subj = findSubject(q);
+    var subj = /\b(loans?|banks?|lenders?|visas?|scholarships?|grants?|fees?|bursar\w*)\b/i.test(q) ? null : findSubject(q);
     if (subj) {
       var exact = function (x) { return String(x.programs || '').toLowerCase().split(',').some(function (p) { return p.trim() === subj; }) ? 0 : 1; };
       var by = uniData().filter(function (x) { return String(x.programs || '').toLowerCase().indexOf(subj) !== -1; }).sort(function (a, b) { return (exact(a) - exact(b)) || ((a.ranked ? a.rank : 1e9) - (b.ranked ? b.rank : 1e9)); });
@@ -1883,7 +2044,7 @@
         row.className = 'msg-actions';
         actions.forEach(function (a) {
           var b = document.createElement(a.href ? 'a' : 'button');
-          if (a.href) { b.href = a.href; if (/^https?:/.test(a.href)) { b.target = '_blank'; b.rel = 'noopener'; } } else b.type = 'button';
+          if (a.href) { b.href = a.href; if (a.tab || /^https?:/.test(a.href)) { b.target = '_blank'; b.rel = 'noopener'; } } else b.type = 'button';
           b.className = 'msg-act' + (a.hot ? ' hot' : '');
           b.textContent = a.label;
           if (a.fn) b.addEventListener('click', a.fn);
@@ -1897,7 +2058,7 @@
     }
     function typingOn(on) { typing.classList.toggle('is-on', on); list.scrollTop = list.scrollHeight; }
     function seed() { if (!seeded) { push('ai', WELCOME); seeded = true; } }
-    function open() { seed(); panel.classList.add('is-open'); panel.setAttribute('aria-hidden', 'false'); launcher.setAttribute('aria-expanded', 'true'); launcher.classList.add('is-hidden'); setTimeout(function () { input.focus(); }, 250); }
+    function open() { loadUniData(); seed(); panel.classList.add('is-open'); panel.setAttribute('aria-hidden', 'false'); launcher.setAttribute('aria-expanded', 'true'); launcher.classList.add('is-hidden'); setTimeout(function () { input.focus(); }, 250); }
     function close() { panel.classList.remove('is-open'); panel.setAttribute('aria-hidden', 'true'); launcher.setAttribute('aria-expanded', 'false'); launcher.classList.remove('is-hidden'); }
     function reset() { $$('.msg', list).forEach(function (n) { n.remove(); }); seeded = false; chips.hidden = false; input.value = ''; sync(); typingOn(false); seed(); }
     function sync() { send.disabled = !input.value.trim(); }
@@ -1908,6 +2069,8 @@
         if (small.matches) close();
         scrollToEl(el, -90);
         if (el.classList && el.classList.contains('faq-item') && !el.classList.contains('is-open')) { var b = $('.faq-q', el); if (b) setTimeout(function () { b.click(); }, 900); }
+        // a service in the home page directory: open its detail
+        if (el.hasAttribute && el.hasAttribute('data-svc-item')) { var sb = $('.svc-btn', el); if (sb && sb.getAttribute('aria-expanded') !== 'true') setTimeout(function () { sb.click(); }, 900); }
       };
     }
     function actionsFor(r) {
@@ -1923,7 +2086,7 @@
         a.push({ label: 'Ask an advisor', fn: function () { setShort(r.uni.name, true); close(); goToForm('University Selection'); } });
         return a;
       }
-      if (r.more) a.push({ label: 'See them all', href: './universities.html?q=' + encodeURIComponent(r.more) });
+      if (r.more) a.push({ label: 'See them all', href: './universities.html?q=' + encodeURIComponent(r.more), tab: true });
       if (r.sec && r.sec !== '#contact') a.push({ label: 'Show me', fn: showMe(r.sec) });
       if (r.el) a.push({ label: 'Show me', fn: showMe(r.el) });
       if (r.form) a.push({ label: 'Book a free consultation', hot: true, fn: function () { close(); goToForm(); } });
@@ -1935,11 +2098,13 @@
       if (!text) return;
       push('me', text); input.value = ''; sync(); chips.hidden = true;
       typingOn(true);
-      setTimeout(function () {
+      // the full university list (499) is fetched on the first question only
+      var pause = new Promise(function (r) { setTimeout(r, reduce ? 0 : 450 + Math.min(500, text.length * 6)); });
+      Promise.all([loadUniData(), pause]).then(function () {
         typingOn(false);
         var r = answer(text);
         push('ai', r.text, actionsFor(r));
-      }, reduce ? 0 : 450 + Math.min(500, text.length * 6));
+      });
     }
     launcher.addEventListener('click', open);
     $$('[data-chat-open-inline]').forEach(function (b) { b.addEventListener('click', open); });
@@ -1957,6 +2122,7 @@
     form.addEventListener('submit', function (e) { e.preventDefault(); say(input.value); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel.classList.contains('is-open')) close(); });
     window.TC_ask = answer; // handy for testing in the console
+    window.TC_loadUnis = loadUniData;
   }
 
   /* Sections that are off screen pause their infinite CSS animations. */
@@ -2085,6 +2251,7 @@
     initRotator();
     initTour();
     initSections();
+    initServiceSkip();
     heroEntrance();
     // phase 2 — below-the-fold features, after the first frame, one per task
     // (anything that builds DOM a scroll effect animates must run before initScrollFx)
@@ -2095,13 +2262,17 @@
       var fn = later.shift();
       if (fn) { var t0 = performance.now(); fn(); bootTimes.push([fn.name, Math.round(performance.now() - t0)]); yieldThen(next); return; }
       if (hasGsap) ScrollTrigger.refresh();
-      if (location.hash === '#contact') arriveAtForm();
+      arriveAtHash();
     }
-    requestAnimationFrame(function () { setTimeout(next, 0); });
+    // after the first frame, or after 200ms if frames are paused (hidden tab)
+    var started = false, go = function () { if (started) return; started = true; setTimeout(next, 0); };
+    requestAnimationFrame(go); setTimeout(go, 200);
     // shared hooks for universities.html (directory shortlist feeds the same form)
-    window.TC = { ctx: ctx, renderCarry: renderCarry, goToForm: goToForm, setInterest: setInterest, reduce: reduce, hasGsap: hasGsap, lenis: lenis, openUni: openUni, setShort: setShort, isShort: isShort, onShortlist: onShortlist };
+    window.TC = { enhanceSelect: enhanceSelect, ctx: ctx, renderCarry: renderCarry, goToForm: goToForm, setInterest: setInterest, reduce: reduce, hasGsap: hasGsap, lenis: lenis, openUni: openUni, setShort: setShort, isShort: isShort, onShortlist: onShortlist };
     window.addEventListener('load', function () { if (hasGsap) ScrollTrigger.refresh(); idle(initImageWarmup); });
     if (document.fonts && document.fonts.ready && hasGsap) document.fonts.ready.then(function () { ScrollTrigger.refresh(); });
   }
+  // back/forward cache: a page restored after the fade-out hand-off must be visible
+  window.addEventListener('pageshow', function () { root.classList.remove('leaving'); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

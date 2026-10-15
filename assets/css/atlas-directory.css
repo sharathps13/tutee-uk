@@ -1,0 +1,63 @@
+/* =====================================================================
+   Tutee Connect UK — the universities directory in the Atlas identity.
+   universities.html keeps its own layout and logic (landing.css +
+   universities.js); this file, loaded after landing.css, maps it onto the
+   Atlas tokens, type and controls so both pages read as one site.
+   ===================================================================== */
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 400 800; font-display: swap; src: url('../fonts/plus-jakarta-sans-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Bricolage Grotesque'; font-style: normal; font-weight: 200 800; font-stretch: 75% 100%; font-display: swap; src: url('../fonts/bricolage-grotesque-latin-wdth.woff2') format('woff2'); }
+
+:root {
+  --night: #0e1828;      /* Atlas night */
+  --night-2: #17233a;
+  --teal: #0f1b2d;       /* old teal surfaces become ink */
+  --teal-2: #3a4558;
+  --maroon: #c62a1f;     /* action red */
+  --maroon-2: #a5211a;
+  --sun: #ff8f84;        /* accent on night: 6.9:1; as a fill under night text: 7.5:1 */
+  --sun-2: #ffb3aa;
+  --paper: #f3efe6;      /* chalk */
+  --mist: #e9e3d6;
+  --ink: #0f1b2d;
+  --ink-2: #3a4558;
+  --line: #d9d1c1;
+  --display: "Bricolage Grotesque", "Plus Jakarta Sans", system-ui, sans-serif;
+  --body: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  --radius: 8px;
+  --focus: #2350b8;
+}
+body { background: var(--paper); }
+:focus-visible { outline-color: var(--focus); }
+.dir-hero :focus-visible, .site-footer :focus-visible, .menu :focus-visible { outline-color: #9db8ff; }
+::selection { background: var(--maroon); color: #fff; }
+
+/* headings: the Atlas voice (light, with a heavy payoff) */
+h1, h2, .dir-hero h1 { font-family: var(--display); }
+.dir-hero h1 { font-weight: 300; letter-spacing: -.045em; }
+.dir-hero h1 .hl { font-weight: 720; color: var(--sun); }
+
+/* one action colour: red with white text */
+.btn-sun, .hero-cta, .header-cta.btn-sun { background: var(--maroon); color: #fff; box-shadow: 0 10px 24px -14px rgba(198, 42, 31, .9); }
+.btn-sun:hover, .hero-cta:hover { background: var(--maroon-2); color: #fff; }
+.btn-maroon { background: var(--maroon); color: #fff; }
+.btn-maroon:hover { background: var(--maroon-2); }
+.btn-ink { background: var(--ink); color: var(--paper); }
+.btn, .dd-btn, .uni-more-btn, .menu-btn { border-radius: 4px; }
+.fab-call { background: var(--maroon); color: #fff; }
+
+/* light surfaces: accents that were amber-on-dark need ink or red here */
+.dir-f.is-set .dir-f-ic, .dir-f.is-set .dd-chev { color: var(--maroon-2); }
+.sl-tray b { color: var(--maroon-2); }
+.heart:hover { border-color: var(--maroon); color: var(--maroon-2); }
+.heart[aria-pressed="true"] { background: var(--maroon); border-color: var(--maroon); color: #fff; }
+.skip-link { background: var(--ink); color: #fff; }
+.progress span { background: var(--maroon); }
+
+/* Quicksand ran light; Jakarta at the same numeric weights reads heavy */
+body { font-weight: 400; }
+.dir-hero p, .dir-card p, .uni-card p { font-weight: 400; }
+
+/* a closed chat panel must not be reachable by Tab (it is aria-hidden) */
+.chat:not(.is-open) { visibility: hidden; }
+/* footer fine print: 4.5:1 or better on the light footer */
+.foot-bottom, .foot-bottom p, .foot-bottom [data-photo-credit] { color: var(--ink-2); }

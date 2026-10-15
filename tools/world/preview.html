@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World preview (dev only)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f3efe6; font: 14px/1.4 system-ui, sans-serif; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .labels { position: fixed; inset: 0; pointer-events: none; }
+  .wl { position: absolute; left: 0; top: 0; opacity: 0; font: 600 12px/1 system-ui; color: #0f1b2d; background: #fbf8f1; padding: 4px 6px; border: 1px solid rgba(15,27,45,.2); white-space: nowrap; translate: 8px -50%; }
+  .wl.is-on { opacity: 1; } .wl.is-active { background: #c62a1f; color: #fff; }
+  .ui { position: fixed; left: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px; max-width: 70vw; }
+  .ui button { font: inherit; padding: 4px 8px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="labels" id="l"></div>
+<div class="ui" id="ui"></div>
+<script type="module">
+  import { mountWorld } from '../../assets/js/world.js';
+  const q = new URLSearchParams(location.search);
+  const w = window.W = mountWorld(document.getElementById('c'), { labels: document.getElementById('l'), stories: ['UK', 'London', 'Birmingham', 'Glasgow', 'Sheffield', 'Manchester', 'Leeds', 'Warwick', 'Edinburgh'] });
+  const ui = document.getElementById('ui');
+  const add = (t, f) => { const b = document.createElement('button'); b.textContent = t; b.onclick = f; ui.appendChild(b); };
+  let cur = 'home';
+  const go = (s, fn) => () => { w.setView(cur, s, 1); cur = s; w.setFrame(+(q.get('fx') ?? 0.2), 0); fn && fn(); };
+  add('home', go('home'));
+  add('worries', go('worries', () => w.setWorry(2)));
+  add('journey', go('journey', () => { w.setRoute(0.55, 0); w.setSteps([2], 0.4); }));
+  add('journey-end', go('journey', () => { w.setRoute(1, 1); w.setSteps([7], 0.4); }));
+  add('why', go('why', () => w.setNation('scotland')));
+  add('universities', go('universities', () => w.setCity('oxford')));
+  add('services', go('services', () => w.setService(4)));
+  add('settle', go('settle', () => w.setStair(1)));
+  add('stories', go('stories', () => w.setStory(3)));
+  add('contact', go('contact'));
+  // ?shot=home&fx=0&fy=0&clean renders a clean still (used for the hero poster)
+  if (q.has('clean')) { ui.remove(); document.getElementById('l').remove(); }
+  const s = q.get('shot') || 'home';
+  w.setView(s, s, 0); w.setFrame(+(q.get('fx') ?? 0.2), +(q.get('fy') ?? 0)); cur = s;
+  window.__ready = true;
+</script>
+</body>
+</html>

@@ -13,6 +13,69 @@
 (function () {
   'use strict';
 
+  /* ---- Course areas. "Known for" is free text (255 distinct subjects), so
+     each subject is grouped into one of these areas; a university can sit in
+     several. Keep the regexes broad: an unmatched university simply doesn't
+     appear under any course filter. */
+  var COURSES = [
+    ['business', 'Business, Finance & Management', /business|manag|financ|account|econom|marketing|\bmba\b|entrepreneur|hospitality|tourism|events|retail|logistic|supply chain|banking|real estate/i],
+    ['computing', 'Computing & IT', /comput|software|\bdata\b|cyber|artificial|\bai\b|informat|\bit\b|digital tech|games? (dev|design)/i],
+    ['engineering', 'Engineering & Technology', /engineer|technolog|aerospace|aeronaut|robot|mechan|electr|automotive|motorsport|manufactur|energy/i],
+    ['medicine', 'Medicine, Nursing & Health', /medic|health|nurs|pharma|dent|physio|optom|chiropr|osteopath|midwif|biomed|clinical|paramedic|occupational|radiograph|psychotherap|nutrition|podiat/i],
+    ['law', 'Law & Criminology', /\blaw\b|legal|crimin|policing/i],
+    ['science', 'Sciences & Maths', /science|physic|chemi|biolog|mathem|maths|statistic|environment|geograph|geolog|forensic|ecolog|marine|astronom/i],
+    ['social', 'Psychology, Social Sciences & Humanities', /psycholog|politic|\bppe\b|sociolog|social|international relations|histor|philosoph|humanit|english|literat|language|linguist|classics|archaeolog|anthropolog|creative writing|liberal arts/i],
+    ['art', 'Art, Design & Fashion', /\bart\b|fine art|design|fashion|illustrat|textile|craft|jewel|photograph|graphic/i],
+    ['performing', 'Music, Drama & Performance', /music|acting|drama|theatre|dance|perform|choreograph|stage|opera|circus/i],
+    ['media', 'Media, Film & Journalism', /media|film|journalism|screen|animation|visual effects|broadcast|communication|television|sound|cinematograph|directing|producing/i],
+    ['architecture', 'Architecture, Building & Planning', /architect|built environment|construct|planning|survey|interior|landscape/i],
+    ['education', 'Education & Teaching', /educat|teach|childhood/i],
+    ['agriculture', 'Agriculture, Animal & Veterinary', /agricult|animal|equine|veterin|horticult|land-based|countryside|farm|zoolog/i],
+    ['sport', 'Sport & Exercise', /sport|exercise|coaching|fitness/i],
+    ['theology', 'Theology & Religious Studies', /theolog|biblic|ministry|divinity|religio|mission|church|islamic|jewish|rabbin/i]
+  ];
+  var NATIONS = ['England', 'Scotland', 'Wales', 'N. Ireland'];
+  var TYPES = ['Russell Group', 'Public', 'Specialist', 'Private', 'College'];
+  var MIN_CITY = 5;   // cities with at least this many institutions get their own area option
+
+  function nationOf(u) { var p = String(u.location || '').split(','); return p[p.length - 1].trim(); }
+  function cityOf(u) { return String(u.location || '').split(',')[0].trim(); }
+  function coursesOf(u) {
+    if (u._courses && u._coursesFor === u.programs) return u._courses;
+    var hay = String(u.programs || '');
+    u._courses = COURSES.filter(function (c) { return c[2].test(hay); }).map(function (c) { return c[0]; });
+    u._coursesFor = u.programs;
+    return u._courses;
+  }
+
+  /* Fill the three filter dropdowns from the data, with counts. This runs as
+     soon as the script loads, i.e. before landing.js turns every <select>
+     into the styled dropdown, so the styled lists pick these options up. */
+  (function fillFilters() {
+    var data = window.UK_UNIVERSITIES || [];
+    function add(sel, value, text) { var o = document.createElement('option'); o.value = value; o.textContent = text; sel.appendChild(o); }
+    var course = document.querySelector('[data-dir-course]'), area = document.querySelector('[data-dir-area]'), type = document.querySelector('[data-dir-type]');
+    if (!course || !area || !type) return;
+    var cc = {}, nc = {}, tc = {}, cities = {};
+    data.forEach(function (u) {
+      coursesOf(u).forEach(function (k) { cc[k] = (cc[k] || 0) + 1; });
+      nc[nationOf(u)] = (nc[nationOf(u)] || 0) + 1;
+      tc[u.type] = (tc[u.type] || 0) + 1;
+      var c = cityOf(u); cities[c] = cities[c] || { n: 0, nation: nationOf(u) }; cities[c].n++;
+    });
+    COURSES.slice().sort(function (a, b) { return a[1].localeCompare(b[1]); }).forEach(function (c) { if (cc[c[0]]) add(course, c[0], c[1] + ' (' + cc[c[0]] + ')'); });
+    NATIONS.forEach(function (n) { if (nc[n]) add(area, 'n:' + n, 'All of ' + n + ' (' + nc[n] + ')'); });
+    Object.keys(cities).filter(function (c) { return cities[c].n >= MIN_CITY; })
+      .sort(function (a, b) { return cities[b].n - cities[a].n || a.localeCompare(b); })
+      .forEach(function (c) { add(area, 'c:' + c, c + ', ' + cities[c].nation + ' (' + cities[c].n + ')'); });
+    TYPES.forEach(function (t) { if (tc[t]) add(type, t, t + ' (' + tc[t] + ')'); });
+    // now build the styled dropdowns (landing.js skipped these: data-defer-dd)
+    [course, area, type].forEach(function (sel) {
+      sel.removeAttribute('data-defer-dd');
+      if (window.TC && window.TC.enhanceSelect) window.TC.enhanceSelect(sel);
+    });
+  })();
+
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var PAGE = 24;
@@ -27,13 +90,12 @@
     }
     var G = window.gsap, canFlip = TC.hasGsap && window.Flip && !TC.reduce;
     var data = (window.TC_pendingUniversities || window.UK_UNIVERSITIES || []).slice();
-    var state = { q: '', nation: 'all', type: 'all', sort: 'rank', shown: PAGE };
+    var state = { q: '', course: 'all', area: 'all', type: 'all', sort: 'rank', shown: PAGE };
     var cache = {};
     var collate = window.Intl && Intl.Collator ? new Intl.Collator('en').compare : function (a, b) { return a < b ? -1 : a > b ? 1 : 0; };
     var count = $('[data-dir-count]'), progress = $('[data-dir-progress]'), more = $('[data-dir-more]'), empty = $('[data-dir-empty]');
     var tray = $('[data-sl-tray]'), trayN = $('[data-sl-n]'), trayNames = $('[data-sl-names]');
 
-    function nationOf(u) { var p = String(u.location || '').split(','); return p[p.length - 1].trim(); }
     function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     var TYPE_CLASS = { 'Russell Group': 't-russell', Specialist: 't-specialist', College: 't-college', Private: 't-private' };
 
@@ -104,7 +166,11 @@
     function matches() {
       var q = state.q.toLowerCase();
       var list = data.filter(function (u) {
-        if (state.nation !== 'all' && nationOf(u) !== state.nation) return false;
+        if (state.course !== 'all' && coursesOf(u).indexOf(state.course) === -1) return false;
+        if (state.area !== 'all') {
+          var kind = state.area.slice(0, 2), val = state.area.slice(2);
+          if (kind === 'n:' ? nationOf(u) !== val : cityOf(u) !== val) return false;
+        }
         if (state.type !== 'all' && u.type !== state.type) return false;
         if (q && (u.name + ' ' + u.location + ' ' + (u.programs || '') + ' ' + u.type).toLowerCase().indexOf(q) === -1) return false;
         return true;
@@ -148,20 +214,32 @@
       // needed; Lenis notices the new page height on its own.
     }
 
-    function chips(sel, key) {
-      var btns = $$(sel + ' [data-val]');
-      btns.forEach(function (b) {
-        b.addEventListener('click', function () {
-          state[key] = b.getAttribute('data-val');
-          state.shown = PAGE;
-          btns.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
-          render('swap');
-        });
+    // course / area / type dropdowns (native selects behind the styled ones)
+    var fSels = { course: $('[data-dir-course]'), area: $('[data-dir-area]'), type: $('[data-dir-type]') };
+    var clearBtn = $('[data-dir-clear]');
+    function paintFilters() {
+      var any = false;
+      Object.keys(fSels).forEach(function (k) {
+        var on = state[k] !== 'all';
+        any = any || on;
+        var box = fSels[k].closest('[data-dir-f]');
+        if (box) box.classList.toggle('is-set', on);
       });
-      return btns;
+      if (clearBtn) clearBtn.hidden = !any;
     }
-    var nationBtns = chips('[data-dir-nation]', 'nation');
-    var typeBtns = chips('[data-dir-type]', 'type');
+    Object.keys(fSels).forEach(function (k) {
+      fSels[k].addEventListener('change', function () {
+        state[k] = fSels[k].value || 'all';
+        state.shown = PAGE;
+        paintFilters();
+        render('swap');
+      });
+    });
+    function clearFilters() {
+      Object.keys(fSels).forEach(function (k) { state[k] = 'all'; fSels[k].value = 'all'; });
+      paintFilters();
+    }
+    if (clearBtn) clearBtn.addEventListener('click', function () { clearFilters(); state.shown = PAGE; render('swap'); });
 
     var qInput = $('[data-dir-q]'), sortSel = $('[data-dir-sort]'), t = 0;
     qInput.addEventListener('input', function () {
@@ -177,9 +255,9 @@
     sortSel.addEventListener('change', function () { state.sort = sortSel.value; render('swap'); });
     $('[data-dir-load]').addEventListener('click', function () { state.shown += PAGE; render('more'); });
     $('[data-dir-reset]').addEventListener('click', function () {
-      state = { q: '', nation: 'all', type: 'all', sort: state.sort, shown: PAGE };
+      state = { q: '', course: 'all', area: 'all', type: 'all', sort: state.sort, shown: PAGE };
       qInput.value = '';
-      [nationBtns, typeBtns].forEach(function (bs) { bs.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-val') === 'all' ? 'true' : 'false'); }); });
+      clearFilters();
       render('swap');
     });
 
