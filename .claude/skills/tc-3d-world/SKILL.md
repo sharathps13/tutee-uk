@@ -19,23 +19,21 @@ description: The Atlas 3D world for Tutee Connect UK — one three.js scene behi
 
 ## What the world is
 
-One idea: *your route to a UK university*. Objects exist only because a chapter talks about them:
-relief UK (four nations as separate meshes, Ireland ghosted for context), the red route thread
-(steps 1–5 on an arc from the south-east, 6 at London, 7–8 up the staircase), brass waypoint rings,
-brass university pins (height = number of top-ranked universities), red story dots, the
-four-step staircase (Student visa → Graduate Route → Skilled Worker → ILR), a 1° graticule.
+One scene per chapter (`tools/world/src/scenes.js`), each about that chapter's topic — never one
+model reused from new angles. Sets sit 90 units apart; the camera cuts between them at the
+transition midpoint while atlas.js dips the canvas. Textures are procedural (`textures.js`);
+shared materials/primitives in `kit.js`. See README "Per-chapter scenes" for the list.
 
 ## API (driven by `assets/js/atlas.js`)
 
 `mountWorld(canvas, {labels, mobile, reduced})` → `setView(a, b, t)` (blend two shots),
-`setFrame(x, y)` (shift subject beside/above the text), `setRoute(a, b)`, `setLayers({...})`
-(**replaces** the visible set), `setSteps(list, focusK)`, `setCity`, `setNation`, `setStair`,
-`setStory`, `setPointer`, `setActive`, `onPick`, `onLost`, `dispose`. Shots live in `SHOTS`.
+`setFrame(x, y)` (shift subject beside/above the text), `setRoute(a, b)`, `setSteps(list, focusK)`, `setFocus`, `setWorry`, `setCity`, `setNation`,
+`setService`, `setGrant`, `setStair`, `setStory`, `onWash`, `setPointer`, `setActive`, `onLost`, `dispose`. Shots live in `SHOTS`.
 
 ## Rules
 
 1. **Content lives in HTML.** Canvas and labels are `aria-hidden`; labels duplicate HTML text.
-   City labels are mouse shortcuts that click the matching city chip; the chips are the real controls.
+   HTML controls drive the scenes (city chips, nation tabs, reading position); the canvas takes no clicks.
 2. **Never block the message.** `flag.js` decides `html.world-on` before first paint (skips
    Save-Data, low memory/cores, `?noworld`); `atlas.js` imports the bundle when the page is idle;
    the hero shows a poster until the first frame (`html.world-ready`).

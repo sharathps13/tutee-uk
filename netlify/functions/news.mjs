@@ -20,8 +20,8 @@ const FEEDS = [
 // GOV.UK items carry no photo; they use one of the site's own UK images.
 const OFFICIAL_IMAGE = '/assets/img/opt/uk-city-640.webp';
 
-const MAX_ITEMS = 6;
-const PER_SOURCE = 2;
+const MAX_ITEMS = 8;
+const PER_SOURCE = 3;
 const FETCH_TIMEOUT_MS = 6000;
 
 // A story must be about higher education / studying / visas …

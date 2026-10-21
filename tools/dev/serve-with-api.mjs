@@ -52,7 +52,14 @@ http.createServer(async (req, res) => {
     });
     return;
   }
-  if (url.pathname === '/api/news') { res.writeHead(404); res.end(); return; }
+  if (url.pathname === '/api/news') {
+    // the real function: live feeds, same filters as production
+    const news = await import(pathToFileURL(path.join(ROOT, 'netlify/functions/news.mjs')).href);
+    const r = await news.default(new Request(url));
+    res.writeHead(r.status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(await r.text());
+    return;
+  }
   let p = path.join(ROOT, decodeURIComponent(url.pathname));
   if (!p.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
   if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');

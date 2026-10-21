@@ -24,17 +24,24 @@
       setTimeout(function () { root.className = root.className.replace(/\s*\barriving\b/, ''); }, 1500);
     }
   } catch (e) { /* very old browser: default behaviour */ }
-  // Home page 3D world (assets/js/atlas.js loads it): decided here, before the
-  // first paint, so its two-column layout never shifts in afterwards. Skipped
-  // for Save-Data, low-memory / few-core devices (stricter on phones) and
-  // ?noworld (testing). If WebGL then fails, atlas.js falls back to 2D.
-  try {
-    var n = navigator, small = window.innerWidth < 760, conn = n.connection || {};
-    var weak = (n.deviceMemory && n.deviceMemory < (small ? 4 : 2)) || (n.hardwareConcurrency && n.hardwareConcurrency < (small ? 4 : 2));
-    if (window.WebGLRenderingContext && !conn.saveData && !weak && !/[?&]noworld\b/.test(location.search)) root.className += ' world-on';
-  } catch (e) { /* no world */ }
+  // The floating dock (Tutee AI, WhatsApp) stays out of the hero: hidden from
+  // the first paint, shown once the visitor reaches the next section
+  // (atlas.js keeps this in step with the scroll position).
+  root.className += ' in-hero';
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduce) return;
+  // Motion styles (the hero's start-of-entrance state) must be on before the
+  // first paint. motion.js is deferred, so if it set this class itself the
+  // hero would paint finished, blink out and then animate back in on every
+  // load. Same condition as motion.js; if the hero entrance hasn't started
+  // within 2.5s (script failed), motion is dropped so nothing stays hidden.
+  if ('IntersectionObserver' in window) {
+    root.className += ' motion';
+    setTimeout(function () {
+      var hero = document.querySelector('.uk-hero');
+      if (hero && !/\bis-in\b/.test(hero.className)) root.className = root.className.replace(/\s*\bmotion\b/, '');
+    }, 2500);
+  }
   root.className += ' hero-wait';
   setTimeout(function () { root.className = root.className.replace(/\s*\bhero-wait\b/, ''); }, 600);
 })(document.documentElement);

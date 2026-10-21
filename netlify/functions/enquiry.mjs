@@ -28,7 +28,29 @@ const SOURCE_PAGE = 'UK Landing Page';
 
 const MAX_BODY_BYTES = 16 * 1024;
 const FORWARD_TIMEOUT_MS = 20000;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Same rules as the form (assets/js/landing.js); kept in step by hand.
+const EMAIL_RE = /^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+const BLOCKED_DOMAINS = /^(?:example\.(?:com|org|net)|test\.com|(?:[a-z0-9-]+\.)?(?:mailinator|guerrillamail|10minutemail|tempmail|temp-mail|yopmail|trashmail|sharklasers|getnada|dispostable|maildrop|throwawaymail|fakeinbox|mintemail|moakt|emailondeck)\.[a-z.]+)$/;
+// national-number length [min, max] and, where fixed, the leading digit, per calling code
+const PHONE_RULES = {
+  '+91': [10, 10, /^[6-9]/], '+44': [9, 10, /^[1-37]/], '+1': [10, 10, /^[2-9]/], '+971': [8, 9, /^[2-9]/], '+61': [9, 9, /^[2-478]/],
+  '+65': [8, 8, /^[689]/], '+60': [9, 10], '+64': [8, 10], '+353': [9, 9], '+49': [10, 11], '+33': [9, 9], '+966': [9, 9],
+  '+974': [8, 8], '+965': [8, 8], '+968': [8, 8], '+92': [10, 10], '+94': [9, 9], '+977': [10, 10], '+880': [10, 10, /^1/],
+  '+63': [10, 10], '+62': [9, 12], '+86': [11, 11, /^1/], '+81': [10, 10], '+82': [9, 10], '+27': [9, 9], '+234': [10, 10],
+  '+254': [9, 9], '+20': [10, 10], '+90': [10, 10], '+7': [10, 10], '+39': [9, 11], '+34': [9, 9], '+31': [9, 9],
+  '+55': [10, 11], '+52': [10, 10], '+230': [7, 8],
+};
+/** "+91 98765 43210" → null if it passes, otherwise a message. */
+export function phoneProblem(phone) {
+  const m = String(phone).match(/^\s*(\+\d{1,4})\s*(.*)$/);
+  let d = (m ? m[2] : String(phone)).replace(/\D/g, '');
+  const code = m ? m[1] : '';
+  if (code && d.length > 10 && d.startsWith(code.slice(1))) d = d.slice(code.length - 1);
+  if (d.startsWith('0') && code !== '+39') d = d.slice(1);
+  const r = PHONE_RULES[code] || [6, 14];
+  if (d.length < r[0] || d.length > r[1] || (r[2] && !r[2].test(d)) || /^(\d)\1+$/.test(d) || d === '1234567890') return 'Please enter a valid phone number.';
+  return null;
+}
 
 const LIMITS = { full_name: 120, phone: 40, email: 200, state: 80, notes: 1000, shortlist: 600, page_url: 200 };
 
@@ -71,9 +93,10 @@ export function parsePayload(raw) {
 export function validate(f) {
   if (f.botcheck) return 'Rejected.';
   if (f.full_name.length < 2 || /\d/.test(f.full_name)) return 'Please enter your full name.';
-  const digits = f.phone.replace(/\D/g, '');
-  if (digits.length < 7 || digits.length > 15 || /^(\d)\1+$/.test(digits)) return 'Please enter a valid phone number.';
-  if (!EMAIL_RE.test(f.email)) return 'Please enter a valid email address.';
+  const phone = phoneProblem(f.phone);
+  if (phone) return phone;
+  if (!EMAIL_RE.test(f.email) || /\.\./.test(f.email)) return 'Please enter a valid email address.';
+  if (BLOCKED_DOMAINS.test(f.email.split('@').pop().toLowerCase())) return 'Please use an email address you check; temporary or example addresses can’t receive our reply.';
   return null;
 }
 

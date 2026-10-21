@@ -3,7 +3,42 @@
 A static rebuild of the USA landing page (https://pageus.netlify.app/#/) for the UK market.
 Same layout, same Tailwind classes, same animations — UK content.
 
-## "The Atlas": the current home page (15 October 2026)
+## The UK marketing landing page (current, 16 October 2026)
+
+`index.html` is a conventional, photo-led marketing and landing page. The 3D experiments
+("The Atlas") were removed at the owner's request; nothing on the page uses WebGL now.
+
+Order: hero (one immersive HD photograph of the Palace of Westminster lit up at dusk:
+Victoria Tower flying the Union flag on the left, Big Ben on the right. The photo is placed so the two
+towers frame the centred headline at any desktop size (and at the screen edges on phones);
+"Study in the" + a giant "UK" filled with a photo of the Union flag, the offer, a free-consultation
+CTA, WhatsApp and three proof points; a location tag with the photo credit; the header is
+transparent over the photo until you scroll; `assets/js/hero.js` adds slight pointer depth) → university strip → why the UK (nation photos, facts) →
+why families choose us (4 problems, each answered by a service) → universities map + shortlist →
+funding (scholarships, loans, lender logos) → how it works (8 steps) → nine services (photo cards) →
+settlement pathway + family (Graduate Route, PR, visas) → student reviews → live UK news → FAQ →
+free consultation form → footer. Every section links to the form.
+
+```
+index.html                markup (built from scratchpad template; all landing.js hooks kept)
+assets/css/atlas.css      tokens + shared components (form, dropdowns, map, FAQ, news, chat, footer)
+assets/css/uk.css         the landing page layout
+assets/js/landing.js      form, validation, /api/enquiry, map, shortlist, FAQ, news, Tutee AI
+assets/js/atlas.js        nation photo tabs, service "Read more", menu focus trap, dataLayer events
+```
+
+Motion (`assets/js/motion.js`, styles at the end of `uk.css`): hero entrance (the photo settles from a slow
+zoom, then the headline and copy arrive); a living hero photo (slow drift and zoom, clouds
+drifting across the sky, gold glints moving on the Thames, the lit facade and Big Ben's clock
+glowing, a light beam passing every 16 s, scroll parallax; textures are generated, x-*.webp), the flag inside "UK" drifting; university marquee; staggered scroll
+reveals; a progress bar that fills as the eight steps arrive; rising settlement steps; pointer
+tilt and sheen on cards; image zoom on hover; button shine; curved edges on the dark sections; a
+header that tucks away while reading. Reveals are CSS transitions with a once-a-second timer
+fallback, so nothing stays hidden on slow devices; reduced motion turns it all off.
+
+The 3D world source stays in `tools/world/` and the Atlas files in `_legacy/` for reference only.
+
+## "The Atlas": superseded 3D version (15 October 2026)
 
 `index.html` was rebuilt from scratch as an editorial atlas of the visitor's own route to a UK
 university. It replaces "The Flight" (dark teal night, amber, departures board, 2D globe), which
@@ -57,6 +92,30 @@ layout to its two-column form; if WebGL is missing, the bundle fails, the contex
 device is low-memory or Save-Data is on, the page uses its 2D layout (still poster in the hero,
 SVG map in Universities). Reduced motion: no Lenis, the camera cuts instead of gliding.
 Test the fallback with `index.html?noworld`.
+
+### Per-chapter scenes (16 October 2026)
+
+The 3D world is no longer one UK model seen from new angles: each chapter has its own scene,
+built from primitives and procedural textures (`tools/world/src/scenes.js`, `textures.js`,
+`kit.js`), lit with image-based lighting and soft shadows. The camera cuts between scenes
+behind a short fade.
+
+| Chapter | Scene | Reacts to |
+|---|---|---|
+| Start | planning desk: printed map of the British Isles, compass, passport, mug | — |
+| The hard parts | four plinths: coins, paperwork + wax seal, interview microphone, suitcase | the worry being read rises |
+| Your route | textured globe with clouds and atmosphere; a plane flies India → UK | each step moves the plane |
+| Why the UK | relief map: clock tower, castle on rock, Welsh castle, basalt columns | nation tabs raise that nation |
+| Universities | college quad, gate tower banner and flags | city chip renames the banner |
+| What we do | felt workbench with one object per service | the service being read lifts |
+| Funding | banking hall at dusk, lectern with scholarship scrolls, coins | each scholarship unrolls |
+| Settle | stone steps with red carpet up to coloured terraced houses | the graduate climbs per visa |
+| Stories | pillar box with postcards from each student's city | the story read comes forward |
+| Free evaluation | the desk with the route ticket, open passport, desk globe | — |
+
+Page textures (paper grain, mottling, woven night finish) are inline SVG noise in
+`atlas.css`; each chapter has an accent colour (`--accent`), and the wash behind the text takes
+its tint from the current scene's sky. Bundle: ~169 KB gzip.
 
 ### Files
 

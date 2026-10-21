@@ -50,7 +50,29 @@ credits line or an image caption).
 
 ---
 
-## Hero tour (`#home`) — HD images in `assets/img/hero/`
+## Hero photograph (`#home`) — `assets/img/hero/parliament-*`
+
+- **Depicts:** The Palace of Westminster lit up at dusk from Westminster Bridge: Victoria Tower flying the Union flag, Elizabeth Tower (Big Ben), the Thames.
+- **Commons file page:** https://commons.wikimedia.org/wiki/File:UK_Parliament_HDR.jpg
+- **Author / photographer:** Mdbeckwith, own work
+- **Licence:** CC BY-SA 3.0 — https://creativecommons.org/licenses/by-sa/3.0/
+- **Attribution:** in the hero's location tag (`Photo: Mdbeckwith, CC BY-SA 3.0`, linked) and the footer credit line.
+- **Files:** resized from the 3840px Commons rendition to 3200/2560/1920/1280/828px WebP; `parliament-1200.jpg` is the social-share image. Resized only; the resized copies are shared under the same CC BY-SA 3.0 licence.
+
+## Hero effect textures — `assets/img/hero/fx-clouds.webp`, `fx-water.webp`
+
+Generated for this site from random noise (Pillow); not photographs, no third-party rights.
+
+## "UK" lettering fill — `assets/img/hero/flag-uk-*`
+
+- **Depicts:** The Union flag flying against a dark sky.
+- **Commons file page:** https://commons.wikimedia.org/wiki/File:UK_Flag_2026.jpg
+- **Author / photographer:** Boaventuravinicius, own work
+- **Licence:** CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+- **Attribution:** footer credit line (`Union flag © Boaventuravinicius (CC BY 4.0)`).
+- **Changes made:** rotated 33° and cropped to a band of fabric (no sky), resized to 2400/1600px WebP.
+
+## Hero tour (`#home`, earlier design) — HD images in `assets/img/hero/`
 
 Downscaled from the full-resolution Commons originals (2560/1920/1280/828px
 WebP). Each credit is shown in the hero, bottom-right, while its photo is on

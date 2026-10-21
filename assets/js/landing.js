@@ -51,6 +51,9 @@
    * ================================================================= */
   function initLenis() {
     if (!hasGsap || !window.Lenis || reduce) return;
+    // touch devices already scroll natively (Lenis only smooths the wheel), and
+    // its native-scroll listener re-measures layout on every scroll: skip it there
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     lenis = new window.Lenis({ lerp: 0.1, wheelMultiplier: 1, smoothWheel: true });
     lenis.on('scroll', ScrollTrigger.update);
     // pinned sections change the page height after load; Lenis must re-measure or it
@@ -352,10 +355,12 @@
     var header = $('[data-header]'), bar = $('[data-progress]'), ring = $('[data-to-top-bar]'), toTop = $('[data-to-top]'), mcta = $('[data-mobile-cta]');
     var contact = $('#contact'), vh = window.innerHeight, max = 1, contactOn = false;
     // measured only on resize / refresh, never inside the scroll handler
-    function measure() { vh = window.innerHeight; max = Math.max(1, document.documentElement.scrollHeight - vh); }
+    // the logo keeps its glass over the hero until half of the hero has scrolled past
+    var heroEl = document.querySelector('.uk-hero'), solidAt = 40;
+    function measure() { vh = window.innerHeight; max = Math.max(1, document.documentElement.scrollHeight - vh); solidAt = heroEl ? Math.max(40, heroEl.offsetHeight / 2) : 40; }
     function update() {
       var y = window.pageYOffset, p = Math.min(1, y / max);
-      header.classList.toggle('is-solid', y > 40);
+      header.classList.toggle('is-solid', y > solidAt);
       if (bar) bar.style.transform = 'scaleX(' + p + ')';
       if (ring) ring.style.strokeDashoffset = 132 - 132 * p;
       if (toTop) toTop.classList.toggle('is-on', y > vh);
@@ -370,13 +375,17 @@
     if (toTop) toTop.addEventListener('click', function () { if (lenis) lenis.scrollTo(0, { duration: 1.6 }); else window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); });
 
     var nav = $$('[data-nav]');
-    var map = { welcome: '', 'why-uk': 'journey', 'financial-aid': 'scholarships', testimonials: 'relocate', contact: '' };
+    var map = { welcome: '', home: '', worries: 'why-uk', scholarships: 'universities', services: 'journey', 'uk-news': 'journey', 'financial-aid': 'universities', contact: '' };
     if ('IntersectionObserver' in window) {
       var io = new IntersectionObserver(function (es) {
         es.forEach(function (e) {
           if (!e.isIntersecting) return;
           var id = e.target.id in map ? map[e.target.id] : e.target.id;
           nav.forEach(function (a) { a.classList.toggle('is-here', a.getAttribute('data-nav') === id); });
+          // the mobile menu marks the section you're reading too
+          var mid = { worries: 'why-uk', 'uk-news': 'journey', 'financial-aid': 'scholarships', home: '', welcome: '' }[e.target.id];
+          if (mid === undefined) mid = e.target.id;
+          $$('[data-menu-link]').forEach(function (a) { a.classList.toggle('is-here', !!mid && a.getAttribute('href') === '#' + mid); });
         });
       }, { rootMargin: '-45% 0px -50% 0px' });
       $$('[data-section]').forEach(function (s) { io.observe(s); });
@@ -391,7 +400,6 @@
       menu.setAttribute('aria-hidden', on ? 'false' : 'true');
       open.setAttribute('aria-expanded', on ? 'true' : 'false');
       lockScroll(on);
-      if (on && hasGsap && !reduce) G.from($$('nav a', menu), { y: 40, opacity: 0, stagger: 0.05, duration: 0.7, ease: 'expo.out', delay: 0.15 });
       if (on) setTimeout(function () { $('[data-menu-close]', menu).focus(); }, 300); else open.focus({ preventScroll: true });
     }
     open.addEventListener('click', function () { set(true); });
@@ -731,7 +739,113 @@
   function proj(p) { return [((p[0] + 8.4) * 34.8).toFixed(1), ((59 - p[1]) * 60).toFixed(1)]; }
   function pathOf(pts) { return 'M' + pts.map(function (p) { return proj(p).join(' '); }).join('L') + 'Z'; }
 
+  /* University showcase (home page): a filterable grid of the top-ranked
+   * universities, built from CITIES / UNI_INFO, sharing the shortlist and
+   * the details sheet with the rest of the site. */
+  function initUniGrid() {
+    var grid = $('[data-uni-grid]'), bar = $('[data-uni-filter]');
+    if (!grid || !bar) return;
+    var all = [];
+    CITIES.forEach(function (c) { c.unis.forEach(function (u) { all.push({ u: u, city: c }); }); });
+    all.sort(function (a, b) { return a.u[0] - b.u[0]; });
+    // crest monogram: the familiar abbreviation, or the place name's initial
+    var ABBR = { 'Imperial College London': 'IC', 'University College London': 'UCL', 'London School of Economics and Political Science': 'LSE', "King's College London": 'KCL' };
+    function initials(name) { return ABBR[name] || name.replace(/^University of\s+|\s+University$/g, '').charAt(0).toUpperCase(); }
+    all.forEach(function (it, i) {
+      var u = it.u, info = UNI_INFO[u[1]] || [], progs = (info[1] || '').split(/,\s*/).filter(Boolean);
+      var li = document.createElement('li');
+      li.className = 'ug-card'; li.setAttribute('data-city', it.city.id);
+      li.style.setProperty('--i', i);
+      li.innerHTML = '<span class="ug-rank" aria-hidden="true">' + u[0] + '</span>' +
+        '<div class="ug-top"><span class="ug-crest" aria-hidden="true">' + esc(initials(u[1])) + '</span>' +
+        '<span class="ug-place"><b>' + esc(it.city.name) + '</b>' + esc(it.city.nation) + '</span></div>' +
+        '<p class="ug-r">Ranked #' + u[0] + ' in the UK</p>' +
+        '<h3 class="ug-name">' + esc(u[1]) + '</h3>' +
+        (progs.length ? '<p class="ug-k">Known for</p><ul class="ug-tags">' + progs.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>' : '') +
+        '<div class="ug-foot"><button class="ug-open" type="button">Details<svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></button>' +
+        '<button class="heart" type="button" aria-pressed="' + isShort(u[1]) + '" aria-label="Shortlist ' + esc(u[1]) + '"><svg class="icon icon-sm"><use href="#i-heart"/></svg></button></div>';
+      var h = $('.heart', li); h._uni = u[1];
+      $('.ug-open', li).addEventListener('click', function () { openUni(uniInfo(u), this); });
+      h.addEventListener('click', function () {
+        setShort(u[1], !isShort(u[1]));
+        if (hasGsap && !reduce) G.fromTo(h, { scale: 0.6 }, { scale: 1, duration: 0.5, ease: 'back.out(3)' });
+      });
+      grid.appendChild(li);
+    });
+    // filter bar: All + one chip per city
+    var opts = [{ id: 'all', name: 'All cities', n: all.length }].concat(CITIES.map(function (c) { return { id: c.id, name: c.name, n: c.unis.length }; }));
+    opts.forEach(function (o) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('aria-pressed', o.id === 'all' ? 'true' : 'false'); b.setAttribute('data-f', o.id);
+      b.innerHTML = esc(o.name) + '<span>' + o.n + '</span>';
+      b.addEventListener('click', function () { filter(o.id); });
+      bar.appendChild(b);
+    });
+    var live = $('[data-uni-count]');
+    var filter = function (id) {
+      $$('button', bar).forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-f') === id ? 'true' : 'false'); });
+      var shown = 0;
+      $$('.ug-card', grid).forEach(function (card) {
+        var on = id === 'all' || card.getAttribute('data-city') === id;
+        if (on) { card.hidden = false; card.style.setProperty('--i', shown++); card.classList.remove('is-in'); void card.offsetWidth; card.classList.add('is-in'); }
+        else card.hidden = true;
+      });
+      if (live) live.textContent = shown + (shown === 1 ? ' university' : ' universities');
+    };
+    // rail: arrows page by the visible width, a line shows how far along you are
+    var prev = $('[data-uni-prev]'), next = $('[data-uni-next]'), prog = $('[data-uni-prog]');
+    function railState() {
+      var max = grid.scrollWidth - grid.clientWidth, p = max > 0 ? grid.scrollLeft / max : 1;
+      var ratio = Math.min(1, grid.clientWidth / Math.max(grid.scrollWidth, 1));
+      if (prog) { prog.style.width = (ratio * 100).toFixed(1) + '%'; prog.style.left = (p * (1 - ratio) * 100).toFixed(1) + '%'; }
+      if (prev) prev.disabled = grid.scrollLeft <= 8;
+      if (next) next.disabled = grid.scrollLeft >= max - 8;
+    }
+    function page(dir) { grid.scrollBy({ left: dir * grid.clientWidth * 0.85, behavior: reduce ? 'auto' : 'smooth' }); }
+    if (prev) prev.addEventListener('click', function () { page(-1); });
+    if (next) next.addEventListener('click', function () { page(1); });
+    grid.addEventListener('scroll', railState, { passive: true });
+    // mouse drag (touch and trackpads already swipe natively): grab, fling,
+    // then let the snap points settle it; a drag never counts as a click
+    var drag = null, moved = false;
+    grid.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      drag = { x: e.clientX, left: grid.scrollLeft, t: performance.now(), v: 0, lx: e.clientX };
+      moved = false;
+    });
+    window.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var dx = e.clientX - drag.x;
+      if (!moved && Math.abs(dx) > 5) { moved = true; grid.classList.add('is-dragging'); try { grid.setPointerCapture(e.pointerId); } catch (er) {} }
+      if (!moved) return;
+      var now = performance.now();
+      drag.v = (e.clientX - drag.lx) / Math.max(now - drag.t, 1); drag.lx = e.clientX; drag.t = now;
+      grid.scrollLeft = drag.left - dx;
+      e.preventDefault();
+    });
+    function endDrag() {
+      if (!drag) return;
+      var v = drag.v; drag = null;
+      if (!moved) return;
+      grid.classList.remove('is-dragging');
+      // fling in the direction of travel, then the CSS snap takes over
+      if (Math.abs(v) > 0.2) grid.scrollBy({ left: -v * 320, behavior: reduce ? 'auto' : 'smooth' });
+      setTimeout(function () { moved = false; }, 0);
+    }
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+    grid.addEventListener('click', function (e) { if (moved) { e.preventDefault(); e.stopPropagation(); } }, true);
+    grid.addEventListener('dragstart', function (e) { e.preventDefault(); });
+    window.addEventListener('resize', railState);
+    var baseFilter = filter;
+    filter = function (id) { baseFilter(id); grid.scrollLeft = 0; railState(); };
+    filter('all');
+    paintShortlist();
+    onShortlist(function () { $$('.heart', grid).forEach(function (h) { h.setAttribute('aria-pressed', isShort(h._uni) ? 'true' : 'false'); }); });
+  }
+
   function initMap() {
+    if ($('[data-uni-grid]')) { initUniGrid(); return; }
     var svg = $('[data-map]');
     if (!svg) return;
     $('[data-map-gb]', svg).setAttribute('d', pathOf(GB));
@@ -1325,10 +1439,11 @@
    * ================================================================= */
   var PHONE_RULES = {
     '+91': [10, 10, /^[6-9]/, 'Indian mobile numbers start with 6, 7, 8 or 9.'],
-    '+44': [9, 10], '+1': [10, 10, /^[2-9]/], '+971': [8, 9], '+61': [9, 9], '+65': [8, 8, /^[689]/],
+    '+44': [9, 10, /^[1-37]/, 'UK numbers have 10 digits after +44 (mobiles start with 7).'], '+1': [10, 10, /^[2-9]/],
+    '+971': [8, 9, /^[2-9]/], '+61': [9, 9, /^[2-478]/, 'Australian numbers start with 2, 3, 4, 7 or 8 (mobiles with 4).'], '+65': [8, 8, /^[689]/],
     '+60': [9, 10], '+64': [8, 10], '+353': [9, 9], '+49': [10, 11], '+33': [9, 9], '+966': [9, 9],
     '+974': [8, 8], '+965': [8, 8], '+968': [8, 8], '+92': [10, 10], '+94': [9, 9], '+977': [10, 10],
-    '+880': [10, 10], '+63': [10, 10], '+62': [9, 12], '+86': [11, 11], '+81': [10, 10], '+82': [9, 10],
+    '+880': [10, 10, /^1/, 'Bangladeshi mobile numbers start with 1.'], '+63': [10, 10], '+62': [9, 12], '+86': [11, 11, /^1/, 'Chinese mobile numbers start with 1.'], '+81': [10, 10], '+82': [9, 10],
     '+27': [9, 9], '+234': [10, 10], '+254': [9, 9], '+20': [10, 10], '+90': [10, 10], '+7': [10, 10],
     '+39': [9, 11], '+34': [9, 9], '+31': [9, 9], '+55': [10, 11], '+52': [10, 10], '+230': [7, 8]
   };
@@ -1355,6 +1470,8 @@
     return { ok: true, national: d };
   }
   var EMAIL_RE = /^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+  // throwaway inboxes and reserved example domains: a reply would never reach anyone
+  var BLOCKED_DOMAINS = /^(?:example\.(?:com|org|net)|test\.com|(?:[a-z0-9-]+\.)?(?:mailinator|guerrillamail|10minutemail|tempmail|temp-mail|yopmail|trashmail|sharklasers|getnada|dispostable|maildrop|throwawaymail|fakeinbox|mintemail|moakt|emailondeck)\.[a-z.]+)$/;
   var MAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'yahoo.co.in', 'yahoo.in', 'hotmail.com', 'outlook.com', 'outlook.in', 'live.com', 'icloud.com', 'rediffmail.com', 'protonmail.com', 'proton.me', 'aol.com', 'msn.com', 'ymail.com', 'zoho.com', 'hotmail.co.uk', 'yahoo.co.uk', 'me.com'];
   // edit distance where swapping two neighbouring letters counts as one typo
   function lev(a, b) {
@@ -1372,6 +1489,7 @@
     if (!v) return { ok: false, msg: 'Enter your email address.' };
     if (!EMAIL_RE.test(v) || /\.\./.test(v)) return { ok: false, msg: 'Enter an email like name@example.com.' };
     var at = v.lastIndexOf('@'), user = v.slice(0, at), dom = v.slice(at + 1).toLowerCase(), fix = '';
+    if (BLOCKED_DOMAINS.test(dom)) return { ok: false, msg: 'Please use an email address you check — temporary or example addresses can’t receive our reply.' };
     if (MAIL_DOMAINS.indexOf(dom) === -1) {
       // fix a mistyped ".com" first, then look for a near-miss of a common provider
       var tld = dom.replace(/\.(con|cmo|ocm|cpm|vom|xom|comm|om|cm|co)$/, '.com');
@@ -1707,7 +1825,7 @@
     { id: 'shortlist', k: 'shortlist shortlisted heart save compare favourite', sec: '#universities',
       a: 'Tap a city on the map (or open the universities page), open any university to see its details, and tap the **heart** to shortlist it. Then choose **Apply with my shortlist** — your shortlist follows you to the free consultation form and is sent with your enquiry, so your counsellor can check your chances for each one.' },
     { id: 'career', k: 'career consultation counselling counseling guidance pathway pathways', sec: '#services',
-      a: 'Our **Career Consultation is free of cost**. It builds your self-awareness about your profile and shows the pathways for career advancement in the UK, and our consultants stay with you through each phase of the application. We also brief you on the UK — one-year Master\'s degrees, the two-year Graduate Route and the pathway onward to the Skilled Worker visa and settlement.' },
+      a: 'Our **Career Consultation is free of cost**. It builds your self-awareness about your profile and shows the pathways for career advancement in the UK, and our consultants stay with you through each phase of the application. We also brief you on the UK — one-year Master\'s degrees, the Graduate Route and the pathway onward to the Skilled Worker visa and settlement.' },
     { id: 'select', k: 'choose select selection pick suit suitable match course courses college', sec: '#services',
       a: 'Our **College Selection** service: based on your interests and previous academics, our process experts suggest the most suitable **courses and universities** across England, Scotland, Wales and Northern Ireland, from 200+ institutions in our network.\n\nWe explain module structures, credit requirements, placement years and post-graduation scope, so you can make the right decision.' },
     { id: 'services', k: 'services service offer offering provide what-we-do end-to-end', sec: '#services',
@@ -1722,10 +1840,10 @@
       a: 'Yes — we have successfully managed many **complicated cases**. Every document is reviewed multiple times before submission, and one-on-one **mock credibility interviews** help you explain your goals clearly to UKVI officers. One of our students, Sneha, had a previous visa refusal; her coordinator turned it around and guided her through the whole documentation process successfully.' },
     { id: 'success', k: 'success rate 99 percent record result track approval chances students helped guided many how-many', sec: '#welcome',
       a: 'Tutee Connect has a **99% UK Student visa success rate**, **200+ UK university tie-ups** and has guided **5,000+ students**. We scrutinise every profile from the view of UKVI officers to choose the right pathway.' },
-    { id: 'graduate', k: 'graduate route after graduation graduating post-study stay two years psw', sec: '#relocate',
-      a: 'The **Graduate Route** lets you stay and work — or look for work — in the UK for **two years** after your degree (**three years after a PhD**). No sponsor is required, which makes it the ideal bridge into a **Skilled Worker visa**.' },
+    { id: 'graduate', k: 'graduate route after graduation graduating post-study stay two years 18 months psw', sec: '#relocate',
+      a: 'The **Graduate Route** lets you stay and work — or look for work — in the UK after your degree: **two years** if you apply on or before 31 December 2026, or **18 months** if you apply from 1 January 2027 (**three years after a PhD**). It cannot be extended, and no sponsor is required, which makes it the ideal bridge into a **Skilled Worker visa**.' },
     { id: 'settle', k: 'settlement settle ilr indefinite leave remain permanent skilled worker long term career pathway', sec: '#relocate',
-      a: 'The pathway to settling in the UK has four steps:\n1. **UK Student Visa** — complete your programme (we help you choose courses that lead into the Graduate Route)\n2. **Graduate Route** — two years to work after graduation (three after a PhD), no sponsor\n3. **Skilled Worker visa** — employer-sponsored, for long-term work\n4. **Indefinite Leave to Remain** — after five continuous years on a qualifying work visa' },
+      a: 'The pathway to settling in the UK has four steps:\n1. **UK Student Visa** — complete your programme (we help you choose courses that lead into the Graduate Route)\n2. **Graduate Route** — two years if you apply by 31 December 2026, 18 months from 1 January 2027 (three after a PhD), no sponsor\n3. **Skilled Worker visa** — employer-sponsored, for long-term work\n4. **Indefinite Leave to Remain** — after five continuous years on a qualifying work visa' },
     { id: 'family', k: 'family dependant partner children bring relocate spouse together mres phd research', sec: '#relocate',
       a: 'We help **MRes and PhD students** relocate to the UK with their families. Since January 2024 only students on **postgraduate research** courses (PhD or equivalent) or **government-sponsored** courses can bring dependants — a partner and children under 18 — on a Student visa.\n\nOnce you move onto the Graduate Route and then a **Skilled Worker visa**, your partner and children can join you, and Skilled Worker dependants have **full work rights**. We prepare the dependant visa applications, documents and interview prep.' },
     { id: 'loan', k: 'loan collateral non-collateral bank banks funding finance lender lenders partners emi nbfc', sec: '#financial-aid',
@@ -1741,13 +1859,13 @@
     { id: 'accom', k: 'accommodation housing pre-departure briefing arrive arrival land landing post-landing gp national insurance brp evisa', sec: '#faq',
       a: 'Yes. We partner with top student housing providers to secure safe, comfortable accommodation near your campus, and run **pre-departure briefings** on UK culture, academic expectations, packing and immigration.\n\nAfter you land, your consultant helps with **accommodation, your eVisa/BRP, GP registration (NHS), National Insurance number, a UK bank account** and finding permitted **part-time work**.' },
     { id: 'work', k: 'work part-time job while studying earn hours', sec: '#journey', specific: true,
-      a: 'After you land, our **post-landing support** helps you find **permitted term-time part-time work** (it\'s part of step 6 of your journey). After graduation, the **Graduate Route** gives you two years to work in the UK (three after a PhD), with no sponsor needed.\n\nThe exact weekly hours you may work aren\'t listed on this page — they depend on your visa conditions, so an advisor confirms them for your case.' },
+      a: 'After you land, our **post-landing support** helps you find **permitted term-time part-time work** (it\'s part of step 6 of your journey). After graduation, the **Graduate Route** lets you work in the UK for two years if you apply by 31 December 2026, or 18 months from 1 January 2027 (three after a PhD), with no sponsor needed.\n\nThe exact weekly hours you may work aren\'t listed on this page — they depend on your visa conditions, so an advisor confirms them for your case.' },
     { id: 'journey', k: 'journey steps stages timeline step roadmap', sec: '#journey',
       a: 'Your UK journey in 8 steps:\n**Before you fly** — 1. Free profile evaluation · 2. English test · 3. University offer · 4. Documents & CAS · 5. Student visa\n**When you land** — 6. Accommodation, eVisa, GP, NI number, bank account and part-time work\n**After graduation** — 7. Graduate Route · 8. Settlement (Skilled Worker, then ILR, with your family alongside you)' },
     { id: 'whyuk', k: 'why britain study united kingdom benefit benefits advantage advantages', sec: '#why-uk',
       a: 'Why the UK:\n• **One-year Master\'s degrees** — finish faster than most countries\n• **Two-year Graduate Route** work visa after you graduate (three after a PhD)\n• **4 nations** to choose from — England, Scotland, Wales and Northern Ireland\n• World\'s best universities, a distinctive and diverse curriculum, and a high level of practical instruction' },
     { id: 'master', k: 'master duration one year 1 long length postgraduate', sec: '#why-uk', specific: true,
-      a: 'UK **Master\'s degrees are typically one year** — you finish faster than in most countries — and the two-year Graduate Route follows. UK MBAs are listed as an option too, and some ask for work experience or a GMAT.' },
+      a: 'UK **Master\'s degrees are typically one year** — you finish faster than in most countries — and the Graduate Route follows. UK MBAs are listed as an option too, and some ask for work experience or a GMAT.' },
     { id: 'unis', k: 'university universities college institutions top ranked list tie-ups', sec: '#universities',
       a: 'We have **200+ UK university tie-ups**. On the map you can explore top-ranked universities in London, Oxford, Cambridge, Edinburgh, Manchester, Coventry, Bristol, Glasgow and Durham, and the universities page lists **all 499 UK institutions** (24 in the Russell Group) with search and filters.\n\nOpen any university for its details, heart it to shortlist, then apply for a free consultation with your shortlist attached.' },
     { id: 'russell', k: 'russell group', sec: '#universities',
@@ -1757,7 +1875,7 @@
     { id: 'levels', k: 'undergraduate bachelor bachelors postgraduate master masters mba phd doctorate research level levels degree pursue', sec: '#services',
       a: 'Yes — we guide students for **Undergraduate**, **Master\'s**, **MBA** and **PhD / research** study in the UK. UK Master\'s degrees are typically **one year**, some MBAs ask for work experience or a **GMAT**, and **PhD / research** students (with MRes students) can also bring their family. Mention your level in the free consultation and your counsellor builds the shortlist around it.' },
     { id: 'contact', k: 'contact phone number call email whatsapp website talk speak reach advisor human office', sec: '.site-footer',
-      a: 'You can reach Tutee Connect on:\n• **Call / WhatsApp:** +91 73583 64959\n• **Email:** info@tuteeconnect.com\n• **Website:** www.tuteeconnect.com\n\nWe reply within one working day.' },
+      a: 'You can reach Tutee Connect on:\n• **Call / WhatsApp:** +91 73583 64959\n• **Email:** info@tuteeconnect.com\n• **Website:** www.tuteeconnect.com\n\nWe reply within two working days.' },
     { id: 'office', k: 'office address location visit branch located headquarters walk', sec: '.site-footer',
       a: 'The office address isn\'t listed on this page. Call or WhatsApp **+91 73583 64959** or email **info@tuteeconnect.com** and an advisor will share it — or book a free consultation and we\'ll arrange a meeting.' },
     { id: 'about', k: 'tutee connect company who are you about experience students guided trust helped many help', sec: '#welcome',
@@ -2131,7 +2249,7 @@
     var io = new IntersectionObserver(function (es) {
       es.forEach(function (e) { e.target.classList.toggle('is-off', !e.isIntersecting); });
     }, { rootMargin: '120px 0px' });
-    $$('[data-section], .velocity, .site-footer').forEach(function (el) { io.observe(el); });
+    $$('[data-section], #uk-news, .velocity, .site-footer').forEach(function (el) { io.observe(el); });
   }
   /* Live UK study news (GET /api/news). Fetched when the strip is about to
      scroll into view; cards are built with textContent (feed text is never
@@ -2151,7 +2269,7 @@
     function el(tagName, cls, txt) { var e = document.createElement(tagName); if (cls) e.className = cls; if (txt) e.textContent = txt; return e; }
     function render(items) {
       list.textContent = '';
-      items.slice(0, 6).forEach(function (n) {
+      items.slice(0, 8).forEach(function (n) {
         if (!/^https:\/\//.test(n.link)) return;
         var a = el('a', 'news-card'); a.href = n.link; a.target = '_blank'; a.rel = 'noopener noreferrer';
         var fig = el('span', 'news-img'), img = document.createElement('img');
@@ -2171,6 +2289,12 @@
         a.setAttribute('aria-label', n.title + ' — ' + n.source + ' (opens in a new tab)');
         list.appendChild(a);
       });
+      // ticker: a hidden second copy makes the right-to-left loop seamless
+      Array.prototype.slice.call(list.children).forEach(function (c) {
+        var d = c.cloneNode(true); d.setAttribute('aria-hidden', 'true'); d.tabIndex = -1; list.appendChild(d);
+      });
+      list.style.setProperty('--nt-dur', (list.children.length * 5) + 's');
+      sec.classList.add('is-ticking');
       list.removeAttribute('aria-busy');
     }
     // live feed first; the bundled snapshot (tools/refresh-news.mjs) if the
@@ -2187,13 +2311,21 @@
         .then(function (j) { return j || get('./assets/data/news.json'); })
         .then(function (j) {
           var items = j && j.items ? j.items.filter(function (n) { return n.title && n.link && n.image; }) : [];
-          if (!items.length) { sec.hidden = true; return; }
+          if (!items.length) { sec.hidden = true; if (hasGsap) idle(function () { ScrollTrigger.refresh(); }); return; }
+          var h0 = sec.offsetHeight;
           render(items);
           if (j.updated && meta) meta.textContent = 'Updated ' + ago(j.updated) + ' · ' + Array.from(new Set(items.map(function (n) { return n.source; }))).join(', ');
-          if (hasGsap) ScrollTrigger.refresh();
+          // re-measuring every scroll trigger mid-scroll caused a hitch; only
+          // needed if the strip changed height, and then only when idle
+          if (hasGsap && sec.offsetHeight !== h0) idle(function () { ScrollTrigger.refresh(); });
         })
-        .catch(function () { sec.hidden = true; if (hasGsap) ScrollTrigger.refresh(); });
+        .catch(function () { sec.hidden = true; if (hasGsap) idle(function () { ScrollTrigger.refresh(); }); });
     }
+    // fetched once the page is idle after load, so the request, image fetches
+    // and decodes happen before the reader scrolls near the strip; the
+    // observer is the fallback for a very fast scroll before that
+    if (document.readyState === 'complete') idle(load);
+    else window.addEventListener('load', function () { idle(load); });
     if ('IntersectionObserver' in window) {
       var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { io.disconnect(); load(); } }, { rootMargin: '800px 0px' });
       io.observe(sec);
