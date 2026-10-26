@@ -33,14 +33,19 @@
   // Motion styles (the hero's start-of-entrance state) must be on before the
   // first paint. motion.js is deferred, so if it set this class itself the
   // hero would paint finished, blink out and then animate back in on every
-  // load. Same condition as motion.js; if the hero entrance hasn't started
-  // within 2.5s (script failed), motion is dropped so nothing stays hidden.
+  // load. Same condition as motion.js; if the hero entrance still hasn't
+  // started 1.5s after the deferred scripts had their chance to run
+  // (DOMContentLoaded fires after them, even if they failed to load), motion
+  // is dropped so nothing stays hidden. Waiting for that rather than a fixed
+  // timer stops a slow phone from flipping the hero layout mid-load.
   if ('IntersectionObserver' in window) {
     root.className += ' motion';
-    setTimeout(function () {
-      var hero = document.querySelector('.uk-hero');
-      if (hero && !/\bis-in\b/.test(hero.className)) root.className = root.className.replace(/\s*\bmotion\b/, '');
-    }, 2500);
+    document.addEventListener('DOMContentLoaded', function () {
+      setTimeout(function () {
+        var hero = document.querySelector('.uk-hero');
+        if (hero && !/\bis-in\b/.test(hero.className)) root.className = root.className.replace(/\s*\bmotion\b/, '');
+      }, 1500);
+    });
   }
   root.className += ' hero-wait';
   setTimeout(function () { root.className = root.className.replace(/\s*\bhero-wait\b/, ''); }, 600);

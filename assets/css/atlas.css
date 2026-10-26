@@ -1,5 +1,11 @@
 @font-face{ font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 400 800; font-display: swap; src: url('../fonts/plus-jakarta-sans-latin.woff2') format('woff2'); }
 @font-face{ font-family: 'Bricolage Grotesque'; font-style: normal; font-weight: 200 800; font-stretch: 75% 100%; font-display: swap; src: url('../fonts/bricolage-grotesque-latin-wdth.woff2') format('woff2'); }
+/* Size-matched fallbacks: while the web fonts load, text is set in a local
+   font scaled to the same width and line metrics, so the swap doesn't move
+   anything (no layout shift on slow connections). Bricolage is matched to the
+   hero heading's setting (700, 92% width). */
+@font-face{ font-family: 'Bricolage Fallback'; src: local('Arial'), local('Helvetica Neue'), local('Helvetica'), local('Roboto'); size-adjust: 94.7%; ascent-override: 98%; descent-override: 28.5%; line-gap-override: 0%; }
+@font-face{ font-family: 'Jakarta Fallback'; src: local('Arial'), local('Helvetica Neue'), local('Helvetica'), local('Roboto'); size-adjust: 104.5%; ascent-override: 99.5%; descent-override: 21%; line-gap-override: 0%; }
 html.lenis,html.lenis body{height: auto;}
 .lenis:not(.lenis-autoToggle).lenis-stopped{overflow: clip;}
 .lenis [data-lenis-prevent]{overscroll-behavior: contain;}
@@ -51,8 +57,8 @@ html.lenis,html.lenis body{height: auto;}
   --grain-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .95 0 0 0 0 .85 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
   /* type */
-  --display: "Bricolage Grotesque", "Plus Jakarta Sans", system-ui, sans-serif;
-  --sans: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --display: "Bricolage Grotesque", "Bricolage Fallback", "Plus Jakarta Sans", system-ui, sans-serif;
+  --sans: "Plus Jakarta Sans", "Jakarta Fallback", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   --t-display: clamp(3rem, min(7.2vw, 12.4vh), 7.4rem);
   --t-h2: clamp(2.2rem, min(4.4vw, 7.6vh), 4.4rem);
   --t-h3: clamp(1.3rem, 1.6vw, 1.55rem);

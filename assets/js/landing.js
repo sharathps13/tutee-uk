@@ -2248,7 +2248,7 @@
     if (!('IntersectionObserver' in window)) return;
     var io = new IntersectionObserver(function (es) {
       es.forEach(function (e) { e.target.classList.toggle('is-off', !e.isIntersecting); });
-    }, { rootMargin: '120px 0px' });
+    }, { rootMargin: '0px' });  // paused the moment a section leaves the screen; resuming carries on seamlessly
     $$('[data-section], #uk-news, .velocity, .site-footer').forEach(function (el) { io.observe(el); });
   }
   /* Live UK study news (GET /api/news). Fetched when the strip is about to

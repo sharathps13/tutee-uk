@@ -2248,3 +2248,27 @@ html.sp-open{overflow: hidden;}
 }
 @media (max-width: 759px) and (max-height: 700px){#faq .ft-grid .ft-back .ft-body{padding-bottom: 10px; gap: 7px;}}
 @media (max-width: 759px) and (prefers-reduced-motion: reduce){#faq .ft-grid .ft.is-turned > .ft-in > .ft-back{animation: none;}}
+
+/* ===== Click sparks in Union Jack colours: twelve fine lines all round the tap ===== */
+.ukc{position: fixed; z-index: 2147483000; width: 0; height: 0; pointer-events: none; contain: layout style; animation: ukcTwist .45s cubic-bezier(.2,.7,.3,1) both;}
+@keyframes ukcTwist{from{transform: rotate(-6deg);} to{transform: rotate(12deg);}}
+.ukc-k{position: absolute; left: -.75px; top: -3.5px; display: block; width: 1.5px; height: 7px; border-radius: 1px; will-change: transform, opacity; animation: ukcSpark .5s cubic-bezier(.25,.7,.35,1) both;}
+.ukc-red{background: #c8102e;}
+.ukc-wht{background: #fff; box-shadow: 0 0 0 .75px #012169;}
+.ukc-blu{background: #012169;}
+@keyframes ukcSpark{
+  0%{transform: rotate(var(--a)) translateY(-3px) scale(1, .4); opacity: 0;}
+  15%{opacity: 1;}
+  42%{transform: rotate(var(--a)) translateY(-8.5px) scale(1, 1); opacity: 1;}
+  68%{transform: rotate(var(--a)) translateY(-11px) scale(1, .21); opacity: .85;}
+  82%{transform: rotate(var(--a)) translateY(-11px) scale(1.7, .36); opacity: 1;}
+  100%{transform: rotate(var(--a)) translateY(-11px) scale(0, 0); opacity: 0;}}
+@media (prefers-reduced-motion: reduce){.ukc{display: none;}}
+
+/* perf: full-width glass blurs re-rendered every scroll frame. The header is
+   already near-opaque, so it drops the blur for a solid tint; the sticky
+   universities bar and the hero strip trade blur for a slightly denser tint. */
+.site-header,.site-header.is-solid{-webkit-backdrop-filter: none; backdrop-filter: none;}
+.site-header.is-solid{background: rgba(243, 239, 230, .98);}
+.ug-bar{-webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(255, 255, 255, .95);}
+.uk-strip{-webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(8, 18, 42, .78);}

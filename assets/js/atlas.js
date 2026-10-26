@@ -956,7 +956,10 @@
   // phones: the cards sit in a swipe row; dots show where you are
   var dotsEl = document.createElement('div'); dotsEl.className = 'ft-dots'; dotsEl.setAttribute('aria-hidden', 'true');
   tiles.forEach(function () { dotsEl.appendChild(document.createElement('i')); });
+  // the dots only show with the swipe cards (tablets); skip the measuring otherwise
+  var swipe = window.matchMedia('(min-width: 760px) and (max-width: 900px)');
   function syncDots() {
+    if (!swipe.matches) return;
     var r = grid.getBoundingClientRect(), mid = r.left + r.width / 2, best = 0, bd = 1e9;
     tiles.forEach(function (t, k) { var b = t.getBoundingClientRect(), d = Math.abs(b.left + b.width / 2 - mid); if (d < bd) { bd = d; best = k; } });
     Array.prototype.forEach.call(dotsEl.children, function (el, k) { el.classList.toggle('on', k === best); });
@@ -964,7 +967,8 @@
   var dotRaf = 0;
   grid.addEventListener('scroll', function () { if (!dotRaf) dotRaf = requestAnimationFrame(function () { dotRaf = 0; syncDots(); }); }, { passive: true });
   grid.addEventListener('scrollend', function () { var k = openIndex(); if (k > -1) { var b = tiles[k].getBoundingClientRect(), r = grid.getBoundingClientRect(); if (b.right < r.left || b.left > r.right) flip(k, false); } });
-  main.hidden = true; main.parentNode.insertBefore(grid, main.nextSibling); grid.parentNode.insertBefore(dotsEl, grid.nextSibling); syncDots();
+  main.hidden = true; main.parentNode.insertBefore(grid, main.nextSibling); grid.parentNode.insertBefore(dotsEl, grid.nextSibling); requestAnimationFrame(syncDots);
+  if (swipe.addEventListener) swipe.addEventListener('change', syncDots);
   // navy / white checkerboard for whatever column count the layout has
   function paint() {
     var cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
@@ -1093,4 +1097,25 @@
     var s = document.createElement('span'); s.className = 'gm-short'; s.setAttribute('aria-hidden', 'true'); s.textContent = w;
     t.appendChild(s);
   });
+})();
+
+/* Clicks and taps: twelve fine sparks (red, white, blue) flick out all
+ * round the pointer in a quick sweep, the burst turning slightly, then each
+ * shrinks to a dot at its tip that twinkles out. Transform and opacity only; keyboard
+ * "clicks" (no pointer position) and reduced motion are skipped, and only a
+ * few run at once. */
+(function () {
+  'use strict';
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var live = 0, MAX = 4, COLS = ['ukc-red', 'ukc-wht', 'ukc-blu'], HTML = '';
+  // twelve fine lines all round the tap point, cycling red, white, blue
+  for (var k = 0; k < 12; k++) HTML += '<i class="ukc-k ' + COLS[k % 3] + '" style="--a:' + (k * 30) + 'deg;animation-delay:' + (k * 10) + 'ms"></i>';
+  document.addEventListener('click', function (e) {
+    if (!e.detail || live >= MAX || (e.clientX === 0 && e.clientY === 0)) return;
+    var b = document.createElement('span'); b.className = 'ukc'; b.setAttribute('aria-hidden', 'true');
+    b.innerHTML = HTML;
+    b.style.left = e.clientX + 'px'; b.style.top = e.clientY + 'px';
+    document.body.appendChild(b); live++;
+    setTimeout(function () { b.remove(); live--; }, 680);
+  }, { passive: true });
 })();
