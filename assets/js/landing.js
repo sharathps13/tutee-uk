@@ -1377,7 +1377,9 @@
         var o = el.options[el.selectedIndex];
         return o && o.value && o.value !== 'General UK Inquiry' ? o.text : '';
       }
-      return el.value.trim();
+      // once the form is completed it is empty: the stub keeps the sender's name
+      var sent = k === 'name' && !el.value.trim() && leadDone();
+      return sent ? String(sent.name || '').trim() : el.value.trim();
     }
     function paint() {
       dds.forEach(function (dd) {
@@ -1406,6 +1408,8 @@
       dots.forEach(function (d) { var k = +d.getAttribute('data-wiz-dot'); d.classList.toggle('is-on', k === n); d.classList.toggle('is-done', k < n); });
       if (bar) bar.style.transform = 'scaleX(' + n / steps.length + ')';
       steps.forEach(function (s) { s.classList.toggle('is-on', s === to); });
+      var sl = $('textarea[data-ctx="shortlist"]', to);
+      if (sl) fitShortlist(sl);
       if (hasGsap && !reduce && !instant && from !== to) G.fromTo(to, { x: 40 * dir, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: 'expo.out', clearProps: 'x,opacity' });
       if (hasGsap) ScrollTrigger.refresh();
     }
@@ -1605,10 +1609,34 @@
    * Lead form + "go to form" links.
    * ================================================================= */
   function setInterest(intent) {
+    // the hidden destination field (Finland's "Interested in"): the topic of the
+    // button that brought the visitor here, always tagged with the country
+    if (intent) $$('[data-destination-input]').forEach(function (i) { i.value = /\bUK\b/.test(intent) ? intent : intent + ' (UK)'; });
     var sel = $('[data-interest]');
     if (!sel || !intent) return;
     if (Array.prototype.some.call(sel.options, function (o) { return (o.value || o.text) === intent; })) sel.value = intent;
     bpPaint();
+  }
+  /* Campaign attribution: remember UTM tags from the landing URL for the visit. */
+  var UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'];
+  function utm() {
+    var out = {};
+    try {
+      var p = new URLSearchParams(location.search), stored = JSON.parse(sessionStorage.getItem('tcUtm') || '{}');
+      UTM_KEYS.forEach(function (k) { if (p.get(k)) stored[k] = p.get(k).slice(0, 100); });
+      sessionStorage.setItem('tcUtm', JSON.stringify(stored));
+      out = stored;
+    } catch (e) { /* storage unavailable */ }
+    return out;
+  }
+  /* A lead form that has been sent stays "completed" in this browser for 30
+     days, so the same person isn't asked to fill it in again. */
+  var LEAD_DONE_KEY = 'tc_uk_lead_done';
+  function leadDone() {
+    try {
+      var d = JSON.parse(localStorage.getItem(LEAD_DONE_KEY) || 'null');
+      return d && Date.now() - d.at < 30 * 864e5 ? d : null;
+    } catch (e) { return null; }
   }
   /* The consultation form lives on the home page only. Elsewhere
      (universities.html) "go to form" carries the shortlist and the chosen
@@ -1682,6 +1710,12 @@
       goToForm(a.getAttribute('data-intent'));
     });
   }
+  // the shortlist box grows with the list, so no name is ever cut off
+  function fitShortlist(sl) {
+    if (sl.tagName !== 'TEXTAREA' || !sl.offsetParent) return;
+    sl.style.height = 'auto';
+    sl.style.height = sl.scrollHeight + 2 + 'px';
+  }
   function renderCarry() {
     var form = $('form[data-lead-form]');
     if (!form) return;
@@ -1690,6 +1724,8 @@
     // types in it themselves; after that their text wins
     var sl = $('[data-ctx="shortlist"]', form);
     if (sl && !sl.hasAttribute('data-typed')) sl.value = ctx.shortlist.join(', ');
+    // as on the Finland form, the shortlist only shows once something is shortlisted
+    if (sl) { var slBox = sl.closest('.fl'); slBox.setAttribute('data-sl-field', ''); slBox.hidden = !ctx.shortlist.length && !sl.value.trim(); fitShortlist(sl); }
     var list = $('[data-carry-list]', form);
     if (!list) { bpPaint(); return; }
     list.innerHTML = '';
@@ -1717,44 +1753,99 @@
     }
     $$('input, textarea', form).forEach(function (i) { i.addEventListener('input', function () { var fl = i.closest('.fl'); if (fl) fl.classList.remove('is-invalid'); }); });
     var slField = $('#f-short', form);
-    if (slField) slField.addEventListener('input', function () { slField.setAttribute('data-typed', ''); });
+    if (slField) slField.addEventListener('input', function () { slField.setAttribute('data-typed', ''); fitShortlist(slField); });
     form.addEventListener('reset', function () { if (slField) slField.removeAttribute('data-typed'); });
+
+    // Study level is required (as on the Finland form): no option is
+    // preselected, the error shows on submit and clears as soon as one is picked.
+    var levelBox = $('[data-field="study_level"]', form), levelMsg = $('#f-level-msg', form);
+    function levelError(on) {
+      if (!levelBox) return;
+      levelBox.classList.toggle('is-invalid', on);
+      levelMsg.textContent = on ? 'Choose what you’re aiming for.' : '';
+      levelMsg.classList.toggle('is-error', on);
+    }
+    $$('input[name="study_level"]', form).forEach(function (r) { r.addEventListener('change', function () { levelError(false); }); });
+
+    // "Form completed": the panel replaces the form, by name and call time
+    function showDone(d, animate) {
+      var first = String(d.name || '').trim().split(/\s+/)[0];
+      $('[data-done-name]', done).textContent = first ? ', ' + first : '';
+      $('[data-done-time]', done).textContent = d.call_time && !/^any/i.test(d.call_time) ? ' in the ' + d.call_time.replace(/\s*\(.*\)/, '').toLowerCase() : '';
+      body.hidden = true; done.hidden = false;
+      if (!animate) return;
+      done.focus({ preventScroll: true });
+      if (hasGsap && !reduce && window.DrawSVGPlugin) {
+        G.timeline().from('[data-check-c]', { drawSVG: '0%', duration: 0.8, ease: 'power2.inOut' }).from('[data-check-p]', { drawSVG: '0%', duration: 0.5, ease: 'power2.out' }).from($$('.done-kick, h3, p, .done-next, .done-row, .done-again', done), { y: 20, opacity: 0, stagger: 0.08, duration: 0.5 }, '-=0.3');
+      }
+      confetti($('[data-confetti]', done));
+    }
+    utm();   // capture campaign tags on arrival, for the rest of the visit
+    var sent = leadDone();
+    if (sent) showDone(sent, false);
+
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (wiz && wiz.step === 1) { $('[data-wiz-next]', form).click(); return; }
+      if (leadDone()) return;
       err.classList.remove('is-on');
       var name = $('#f-name'), phone = $('#f-phone'), email = $('#f-email');
       // step 1 was checked before Continue; re-check in case it was edited via Back
       if (verify && (!checkName(name.value).ok || !checkPhone($('#f-code', form).value, phone.value).ok || !checkEmail(email.value).ok)) { wiz.go(1); verify.step1(); return; }
+      var level = $('input[name="study_level"]:checked', form);
+      if (!level) {
+        levelError(true);
+        var firstLv = $('input[name="study_level"]', form);
+        if (firstLv) firstLv.focus({ preventScroll: true });
+        if (levelBox) levelBox.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+        return;
+      }
       function val(sel) { var el = $(sel, form); return el ? el.value.trim() : ''; }
-      // The server stamps the time and the source page itself; these are
-      // just what the visitor typed.
+      function pick(n) { var r = $('input[name="' + n + '"]:checked', form); return r ? r.value : ''; }
+      // Finland's field names: what /api/enquiry and the Website Leads sheet
+      // expect. The server stamps the date/time and labels the page itself.
       var data = {
-        full_name: name.value.trim(),
-        phone: verify ? verify.phone() : (val('#f-code') + ' ' + phone.value.trim()).trim(),
+        name: name.value.trim(),
         email: email.value.trim(),
+        phone: verify ? verify.phone() : (val('#f-code') + ' ' + phone.value.trim()).trim(),
         state: val('#f-state'),
-        notes: val('#f-notes'),
+        call_time: val('#f-call'),
+        course: val('#f-course'),
+        study_level: pick('study_level'),
+        intake: pick('intake'),
         shortlist: val('#f-short'),
-        page_url: enquiryPage(),
+        destination: val('[data-destination-input]') || 'General UK Inquiry',
+        form_location: val('[name="form_location"]'),
+        subject: val('[name="subject"]'),
+        from_name: val('[name="from_name"]'),
+        page: enquiryPage(),
         botcheck: $('[name="botcheck"]', form).checked ? '1' : ''
       };
+      var tags = utm();
+      Object.keys(tags).forEach(function (k) { data[k] = tags[k]; });
       btn.disabled = true; btn.innerHTML = '<span>Submitting…</span>';
       fetch(ENQUIRY_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) })
         .then(function (r) { return r.json().catch(function () { return { success: false }; }); })
         .then(function (res) {
           if (res && res.success) {
-            form.reset(); body.hidden = true; done.hidden = false; done.focus();
-            if (hasGsap && !reduce && window.DrawSVGPlugin) {
-              G.timeline().from('[data-check-c]', { drawSVG: '0%', duration: 0.8, ease: 'power2.inOut' }).from('[data-check-p]', { drawSVG: '0%', duration: 0.5, ease: 'power2.out' }).from($$('h3, p, .done-row', done), { y: 20, opacity: 0, stagger: 0.08, duration: 0.5 }, '-=0.3');
-            }
-            confetti($('[data-confetti]', done));
+            var d = { name: data.name, call_time: data.call_time || '', at: Date.now() };
+            try { localStorage.setItem(LEAD_DONE_KEY, JSON.stringify(d)); } catch (err2) { /* private mode */ }
+            form.reset();
+            showDone(d, true);
           } else fail((res && res.message) || 'Your details were not sent. Try again, or email info@tuteeconnect.com.');
         })
         .catch(function () { fail('Your details were not sent because the connection dropped. Check your internet and try again.'); })
         .then(function () { btn.disabled = false; btn.innerHTML = btnHTML; });
     });
-    $('[data-form-again]', form).addEventListener('click', function () { if (verify) verify.reset(); done.hidden = true; body.hidden = false; if (wiz) wiz.go(1, true); renderCarry(); if (wiz) wiz.focus(); });
+    // "+ Submit another enquiry": forget the sent flag and bring back a fresh form
+    $('[data-form-again]', form).addEventListener('click', function () {
+      try { localStorage.removeItem(LEAD_DONE_KEY); } catch (e3) { /* private mode */ }
+      form.reset(); levelError(false);
+      $$('select', form).forEach(function (s) { s.dispatchEvent(new Event('change', { bubbles: true })); });
+      if (verify) verify.reset();
+      done.hidden = true; body.hidden = false;
+      if (wiz) wiz.go(1, true); renderCarry(); if (wiz) wiz.focus();
+    });
     // shortlist + topic handed over from universities.html (see handOffToHome)
     var hand = null;
     try { hand = JSON.parse(localStorage.getItem(HANDOFF) || 'null'); localStorage.removeItem(HANDOFF); } catch (e2) { /* storage unavailable */ }
@@ -1788,7 +1879,7 @@
    *  an advisor confirms the exact details. It never asks for personal data.
    * ================================================================= */
   var WA_URL = 'https://wa.me/917358364959';
-  var WELCOME = "Hi! 👋 I'm **Tutee AI**.\n\nAsk me anything about this page — studying in the UK, the Student visa, the Graduate Route, scholarships and loans, universities, bringing your family, or how Tutee Connect helps.";
+  var WELCOME = "Hi! 👋 I'm **Tutee AI**.\n\nAsk me anything about this page — studying in the UK, the Student visa, the Graduate Route, scholarships and loans, universities, bringing your family, or how Tutee Connect helps.\n\nWant a counsellor to call you? Type **Request a callback**.";
   var STOP = ('a an the and or but if of to in on at for with by from is are was were be been am do does did can could would should will shall may might ' +
     'i me my we our you your it its this that these those there here what which who whom how when where whats hows tell about please ' +
     'get got give know want need like also just any some more most much many very really uk tutee connect').split(' ');
@@ -1947,7 +2038,7 @@
     uniLoad = new Promise(function (res) {
       var sc = document.createElement('script');
       sc.src = './assets/js/universities-data.js';
-      sc.onload = sc.onerror = function () { subjects = null; vocabCache = null; res(); };
+      sc.onload = sc.onerror = function () { subjects = null; vocabCache = null; rawDict = null; res(); };
       document.head.appendChild(sc);
     });
     return uniLoad;
@@ -1965,10 +2056,12 @@
     data.forEach(function (u) {
       var words = u.name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(function (w) { return w.length > 2 && !GENERIC[w]; });
       var full = u.name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
-      if (!words.length) { if (low.indexOf(' ' + full + ' ') !== -1 && full.length > bestLen) { best = u; bestLen = full.length; } return; }
-      if (words.length === 1 && COMMON[words[0]] && low.indexOf(' ' + full + ' ') === -1) return;
+      // the full name typed out beats a partial match ("Queen Mary University of London", not "University of London")
+      var whole = low.indexOf(' ' + full + ' ') !== -1;
+      if (!words.length) { if (whole && full.length > bestLen) { best = u; bestLen = full.length; } return; }
+      if (words.length === 1 && COMMON[words[0]] && !whole) return;
       var all = words.every(function (w) { return low.indexOf(' ' + w + ' ') !== -1; });
-      var len = words.join(' ').length;
+      var len = whole ? full.length : words.join(' ').length;
       if (all && len > bestLen) { best = u; bestLen = len; }
     });
     return best;
@@ -1998,8 +2091,8 @@
 
   // subjects come from the universities' "known for" lists
   var subjects = null;
-  function findSubject(q) {
-    if (!/\b(univ\w*|colleges?|best|top|good|study|studying|where|which|known)\b/i.test(q)) return null;
+  function findSubject(q, loose) {
+    if (!loose && !/\b(univ\w*|colleges?|best|top|good|study|studying|where|which|known)\b/i.test(q)) return null;
     if (!subjects) {
       var seen = {};
       uniData().forEach(function (u) { String(u.programs || '').split(',').forEach(function (p) { p = p.trim().toLowerCase(); if (p.length > 2) seen[p] = 1; }); });
@@ -2061,6 +2154,243 @@
     return { title: best.p.title, text: top.join(' '), el: best.p.el };
   }
 
+  // ---- 4. the conversation ------------------------------------------------
+  /* What the chat is currently about, so a follow-up carries on from the last
+     answer: "where is it?", "which of these are Russell Group?", "what about
+     Glasgow?", "compare the top two", "tell me more". */
+  var chatCtx = { uni: null, list: null, label: '', more: null, place: null, subject: null, topic: null, deeper: 0 };
+  var answered = 0;
+  function cap(s) { return String(s).replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+  // [label](ask:…) renders as a link that asks Tutee AI the question
+  function askLink(label, question) {
+    return '[' + String(label).replace(/[\[\]]/g, '') + '](ask:' + encodeURIComponent(question || label).replace(/\(/g, '%28').replace(/\)/g, '%29') + ')';
+  }
+  function byRank(a, b) { return (a.ranked ? a.rank : 1e9) - (b.ranked ? b.rank : 1e9); }
+  function inPlace(place) {
+    var p = place.toLowerCase();
+    return function (u) { return String(u.location || '').toLowerCase().split(',').map(function (x) { return x.trim(); }).indexOf(p) !== -1; };
+  }
+  function knownFor(u, subj) { return String(u.programs || '').toLowerCase().split(',').some(function (p) { return p.trim().indexOf(subj) !== -1; }); }
+  function listAnswer(list, label, more) {
+    var shown = list.slice(0, 6).map(function (u) { return '- ' + askLink((u.ranked ? '#' + u.rank + ' ' : '') + u.name, 'Tell me about ' + u.name); }).join('\n');
+    return {
+      text: '**' + label + '** on this site:\n' + shown + (list.length > 6 ? '\n\nAnd ' + (list.length - 6) + ' more on the universities page.' : '') + '\n\nTap a university to ask about it.',
+      list: list, label: label, more: (list.length > 6 || !window.UK_UNIVERSITIES) ? more : null
+    };
+  }
+
+  // a question about one side of a university: its ranking, place, subjects, type or entry
+  var FACET = /\b(rank|ranked|ranking|rankings|position|where|located|location|city|campus|known for|good for|famous|strong in|courses?|subjects?|programmes?|programs?|russell|type|kind of|public|private|apply|entry|requirements?|admissions?|scholarships?|bursar\w*|grants?|funding)\b/i;
+  var BACKREF = /\b(it|its|it's|this (university|uni|one|place|college)|that (university|uni|one|college)|the (university|uni)|there)\b/i;
+  function facetAnswer(u, q) {
+    var n = '**' + u.name + '**', city = String(u.location || '').split(',')[0].trim(), t;
+    if (/\b(scholarships?|bursar\w*|grants?|funding)\b/i.test(q)) {
+      t = 'For ' + n + ', we look for its merit-based scholarships, departmental grants and bursaries that fit your course. In general:\n\n' + kbById('scholar').a;
+    } else if (/\b(rank|ranked|ranking|rankings|position)\b/i.test(q)) {
+      t = u.ranked ? n + ' is ranked **#' + u.rank + ' in the UK** on this site (a general blend of widely used league tables).'
+        : n + ' isn\'t in the ranked list on this site, which covers the leading universities. An advisor can tell you how it compares for your course.';
+    } else if (/\b(where|located|location|city|campus)\b/i.test(q)) {
+      var others = city ? uniData().filter(inPlace(city)).length - 1 : 0;
+      t = n + ' is in **' + (u.location || 'the UK') + '**.' + (others > 0 ? ' There ' + (others === 1 ? 'is 1 other institution' : 'are ' + others + ' other institutions') + ' in ' + city + ' on this site: ' + askLink('see them', 'Universities in ' + city) + '.' : '');
+    } else if (/\b(known for|good for|famous|strong in|courses?|subjects?|programmes?|programs?)\b/i.test(q)) {
+      t = u.programs ? n + ' is known for **' + u.programs + '**. Exact courses and entry requirements depend on the department; an advisor checks them for your profile.'
+        : 'This site doesn\'t list subjects for ' + n + '. An advisor can check its courses for you.';
+    } else if (/\b(russell|type|kind of|public|private)\b/i.test(q)) {
+      t = n + ': ' + (TYPE_INFO[u.type] || u.type || 'its type isn\'t listed on this site') + '.';
+    } else if (/\b(apply|entry|requirements?|admissions?)\b/i.test(q)) {
+      t = 'Entry requirements for ' + n + ' depend on the course, so an advisor confirms them for your profile. In general:\n\n' + kbById('require').a;
+    } else return null;
+    return { text: t, uni: u, city: city };
+  }
+
+  // comparisons: two or more universities, or two or more places
+  var COMPARE = /\b(vs\.?|versus|compare|comparison|compared|difference|differences|better|or)\b/i;
+  function findUnis(q) {
+    var seen = {}, out = [];
+    q.split(/\s*(?:\bvs\.?|\bversus\b|\bor\b|\band\b|\bwith\b|\bto\b|,|&)\s*/i).forEach(function (part) {
+      var u = part.trim() && findUni(part);
+      if (u && !seen[u.name]) { seen[u.name] = 1; out.push(u); }
+    });
+    return out;
+  }
+  function findPlaces(q) {
+    var low = q.toLowerCase();
+    return PLACES.filter(function (p) { return new RegExp('\\b' + p + '\\b').test(low) && !(p === 'ireland' && /northern ireland/.test(low)); });
+  }
+  function compareUnis(list) {
+    var t = '**' + list.map(function (u) { return u.name; }).join(' vs ') + '**\n' + list.map(function (u) {
+      return '- **' + u.name + '**: ' + [u.ranked ? '#' + u.rank + ' in the UK' : 'not in the ranked list', u.location, u.type, u.programs ? 'known for ' + u.programs : ''].filter(Boolean).join(' · ');
+    }).join('\n');
+    var ranked = list.filter(function (u) { return u.ranked; }).sort(byRank);
+    if (ranked.length === list.length) t += '\n\n**' + ranked[0].name + '** ranks highest on this site\'s blended ranking.';
+    t += '\n\nFees, entry requirements and your chances of an offer aren\'t listed here; an advisor compares them for your profile in the free consultation.';
+    return { text: t, list: list, label: 'Those universities', form: true, compared: true };
+  }
+  function comparePlaces(places) {
+    var t = '**' + places.map(cap).join(' vs ') + '**\n' + places.map(function (p) {
+      var l = uniData().filter(inPlace(p)).sort(byRank), rg = l.filter(function (u) { return u.type === 'Russell Group'; }).length;
+      return '- **' + cap(p) + '**: ' + l.length + ' institution' + (l.length === 1 ? '' : 's') + ' on this site' + (rg ? ', ' + rg + ' in the Russell Group' : '') +
+        (l.length ? '. Highest ranked: ' + l.slice(0, 2).map(function (u) { return askLink(u.name, 'Tell me about ' + u.name); }).join(', ') : '');
+    }).join('\n');
+    return { text: t + '\n\nLiving costs and rents aren\'t listed on this page; your counsellor covers them for your city.', place: places[0], compared: true };
+  }
+
+  // "which of these are Russell Group / in London / for law", "the top three"
+  var NUMW = { one: 1, two: 2, three: 3, four: 4, five: 5, ten: 10 };
+  function refine(q) {
+    var list = chatCtx.list;
+    if (!list || !list.length || !/\b(these|those|them|which of|of them|among them|the top|top (\d+|two|three|four|five|ten)|same list)\b/i.test(q)) return null;
+    var out = list.slice(), bits = [];
+    if (/\brussell\b/i.test(q)) { out = out.filter(function (u) { return u.type === 'Russell Group'; }); bits.push('Russell Group'); }
+    ['Specialist', 'Private', 'Public', 'College'].forEach(function (ty) {
+      if (new RegExp('\\b' + ty + '\\b', 'i').test(q)) { out = out.filter(function (u) { return u.type === ty; }); bits.push(ty); }
+    });
+    var pl = findPlace(q); if (pl) { out = out.filter(inPlace(pl)); bits.push('in ' + cap(pl)); }
+    var sub = findSubject(q, true); if (sub) { out = out.filter(function (u) { return knownFor(u, sub); }); bits.push('known for ' + sub); }
+    out.sort(byRank);
+    var m = q.match(/\btop (\d+|one|two|three|four|five|ten)\b/i), n = m ? (NUMW[m[1].toLowerCase()] || +m[1]) : 0;
+    if (/\b(compare|vs\.?|versus|difference|better)\b/i.test(q)) {
+      if (out.length > 1) return compareUnis(out.slice(0, n || 2));
+      return { text: 'That list has ' + (out.length ? 'only one university, ' + askLink(out[0].name, 'Tell me about ' + out[0].name) : 'no universities') + ', so there\'s nothing to compare. Name two, for example ' + askLink('Oxford vs Cambridge') + '.' };
+    }
+    if (!n && /\b(best|highest|top)\b/i.test(q)) n = 3;
+    if (!bits.length && !n) return null;
+    if (!out.length) return { text: 'None of them are ' + bits.join(', ') + ' on this site. ' + askLink('Show all ' + bits.join(' ') + ' universities', 'Universities ' + bits.join(' ')) + ', or ask me something else.' };
+    if (n) out = out.slice(0, n);
+    return listAnswer(out, chatCtx.label + (bits.length ? ': ' + bits.join(', ') : '') + (n ? ' (top ' + n + ')' : ''), pl || sub || chatCtx.more);
+  }
+
+  // "tell me more": the next passage of the section the last answer came from
+  function morePassage() {
+    var e = chatCtx.topic && kbById(chatCtx.topic), root = e && e.sec ? $(e.sec) : null;
+    if (!root) return null;
+    if (!passages) passages = harvest();
+    // passages of that section, closest to the topic first
+    var cand = passages.filter(function (p) { return p.el && (p.el === root || root.contains(p.el)) && e.a.indexOf(p.text.slice(0, 40)) === -1; })
+      .map(function (p) { return { p: p, s: e._k.filter(function (t) { return p._t.indexOf(t) !== -1; }).length }; })
+      .filter(function (c) { return c.s >= 2; })   // only passages that are really about the topic
+      .sort(function (a, b) { return b.s - a.s; });
+    if (chatCtx.deeper >= cand.length) return null;
+    var p = cand[chatCtx.deeper++].p, title = (p.title || '').trim(), body = p.text;
+    if (title && body.indexOf(title) === 0) body = body.slice(title.length).trim();   // the title is often the passage's first line
+    var sents = body.match(/[^.!?]+[.!?]*/g) || [body];
+    return { text: (title ? '**' + title + '**\n' : '') + sents.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim(), el: p.el, topic: e.id, keepDeeper: true };
+  }
+
+  /* Typos: a word that isn't on this page (or in its university list) is read
+     as the closest word that is, one letter off for short words and two for
+     long ones, and the answer says what it was read as. */
+  var rawDict = null, rawKeys = null;
+  function buildRawDict() {
+    var f = {};
+    function add(s, w) { String(s || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z]+/).forEach(function (x) { if (x.length > 3) f[x] = (f[x] || 0) + (w || 1); }); }
+    KB.forEach(function (e) { add(e.k, 3); add(e._tpl || e.a); });
+    if (!passages) passages = harvest();
+    passages.forEach(function (p) { add(p.title + ' ' + p.text); });
+    uniData().forEach(function (u) { add(u.name + ' ' + u.location + ' ' + u.programs, 2); });
+    PLACES.forEach(function (p) { add(p, 5); });
+    Object.keys(SYN).forEach(function (k) { add(k, 3); });
+    add('what where which when whats tell about compare versus better difference between best top universities university college colleges study studying course courses scholarship scholarships ranking ranked located known these those them more request callback counsellor counselor advisor hello thanks thank please', 5);
+    rawDict = f; rawKeys = Object.keys(f);
+  }
+  function correctTypos(q) {
+    if (!rawDict) buildRawDict();
+    var fixes = [];
+    var out = q.replace(/[A-Za-z][A-Za-z’']*/g, function (w) {
+      var lw = w.toLowerCase().replace(/[’']/g, '');
+      if (lw.length < 4 || STOPSET[lw] || rawDict[lw] || rawDict[lw.replace(/s$/, '')] || rawDict[lw + 's'] || SYN[lw]) return w;
+      var max = lw.length >= 7 ? 2 : 1, best = null, bd = max + 1, bf = 0;
+      rawKeys.forEach(function (k) {
+        if (k.charAt(0) !== lw.charAt(0) || Math.abs(k.length - lw.length) > max) return;
+        var d = lev(lw, k);
+        if (d < bd || (d === bd && rawDict[k] > bf)) { bd = d; best = k; bf = rawDict[k]; }
+      });
+      if (!best || bd > max) return w;
+      fixes.push([w, best]);
+      return best;
+    });
+    return { q: out, fixes: fixes };
+  }
+
+  // suggested next questions under an answer
+  var NEXT = {
+    visa: ['How do mock interviews work?', 'What documents do I need?', 'What can I do after graduating?'],
+    refusal: ['How do mock interviews work?', 'What is your visa success rate?'],
+    mock: ['How does the Student visa work?', 'What documents do I need?'],
+    processing: ['How does the Student visa work?', 'What documents do I need?'],
+    graduate: ['What is the Skilled Worker visa?', 'How do I settle in the UK?', 'Can my family come with me?'],
+    settle: ['What is the Skilled Worker visa?', 'Can my family come with me?'],
+    skilled: ['How do I settle in the UK?', 'Can my family come with me?'],
+    family: ['What is the Graduate Route?', 'What is the Skilled Worker visa?'],
+    loan: ['What scholarships can I get?', 'What does the free consultation include?'],
+    scholar: ['Tell me about merit-based scholarships', 'Full and partial grants', 'Help with scholarship essays'],
+    merit: ['Full and partial grants', 'Tell me about education loans'],
+    grants: ['Help with scholarship essays', 'Tell me about education loans'],
+    essay: ['What scholarships can I get?', 'Tell me about education loans'],
+    cost: ['What scholarships can I get?', 'Tell me about education loans'],
+    english: ['What documents do I need?', 'How does the Student visa work?'],
+    require: ['Which English tests do you prepare for?', 'Help with my Personal Statement'],
+    docs: ['What documents do I need?', 'How does the Student visa work?'],
+    journey: ['How does the Student visa work?', 'What happens after I land?', 'What is the Graduate Route?'],
+    accom: ['Can I work part-time while studying?', 'What is the Graduate Route?'],
+    work: ['What is the Graduate Route?', 'What is the Skilled Worker visa?'],
+    whyuk: ['How long is a Master\'s in the UK?', 'What is the Graduate Route?', 'Universities in London'],
+    master: ['What is the Graduate Route?', 'Best universities for business'],
+    levels: ['How long is a Master\'s in the UK?', 'Can my family come with me?'],
+    unis: ['Universities in London', 'How many are Russell Group?', 'Best universities for computer science'],
+    russell: ['Russell Group universities in Scotland', 'Compare Oxford and Cambridge'],
+    directory: ['Universities in London', 'Best universities for medicine'],
+    shortlist: ['Universities in London', 'What does the free consultation include?'],
+    services: ['Tell me about College Selection', 'How do mock interviews work?', 'What scholarships can I get?'],
+    select: ['Universities in London', 'Best universities for business'],
+    career: ['What does the free consultation include?', 'How do I settle in the UK?'],
+    consult: ['What do I need to apply?', 'What is your visa success rate?'],
+    success: ['What do your students say?', 'How does the Student visa work?'],
+    about: ['What services do you offer?', 'What is your visa success rate?'],
+    reviews: ['What is your visa success rate?', 'What services do you offer?'],
+    intake: ['What do I need to apply?', 'What does the free consultation include?'],
+    news: ['How does the Student visa work?', 'What is the Graduate Route?'],
+    dest: ['Why study in the UK?'],
+    contact: [], office: []
+  };
+  function nextFor(r) {
+    if (r.lead) return [];
+    if (r.unknown) return ['Request a callback', 'What services do you offer?'];
+    var out = [];
+    if (r.uni && !r.compared) {
+      var u = r.uni;
+      if (r.city && uniData().filter(inPlace(r.city)).length > 1) out.push('Universities in ' + r.city);
+      if (u.ranked) {
+        var nb = uniData().filter(function (x) { return x.ranked && x.name !== u.name; }).sort(function (a, b) { return Math.abs(a.rank - u.rank) - Math.abs(b.rank - u.rank) || a.rank - b.rank; })[0];
+        if (nb) out.push('Compare it with ' + nb.name);
+      }
+      var p0 = String(u.programs || '').split(',')[0].trim();
+      if (p0) out.push('Best universities for ' + p0.toLowerCase());
+    } else if (r.list && r.list.length > 1 && !r.compared) {
+      var rg = r.list.filter(function (x) { return x.type === 'Russell Group'; }).length;
+      if (rg && rg < r.list.length) out.push('Which of these are Russell Group?');
+      out.push('Compare the top two');
+    } else if (r.compared && r.place) {
+      out.push('Universities in ' + cap(r.place));
+    } else if (r.compared && r.list) {
+      var c0 = String(r.list[0].location || '').split(',')[0].trim(), s0 = String(r.list[0].programs || '').split(',')[0].trim();
+      if (c0) out.push('Universities in ' + c0);
+      if (s0) out.push('Best universities for ' + s0.toLowerCase());
+    } else if (r.topic && NEXT[r.topic]) out = NEXT[r.topic].slice();
+    if (r.topic && kbById(r.topic) && kbById(r.topic).sec && $(kbById(r.topic).sec) && out.length < 3) out.push('Tell me more');
+    if (++answered % 3 === 0 || !out.length) out.push('Request a callback');
+    return out.slice(0, 3);
+  }
+  function remember(r, q) {
+    if (r.list) { chatCtx.list = r.list; chatCtx.label = r.label || 'Those universities'; chatCtx.more = r.more || chatCtx.more; }
+    if (r.uni) chatCtx.uni = r.uni;
+    else if (r.topic) chatCtx.uni = null;      // a new topic ends the university thread
+    if ('subject' in r) chatCtx.subject = r.subject;
+    else if (r.topic) chatCtx.subject = null;
+    if (r.place) chatCtx.place = r.place;
+    if (r.topic) { if (!r.keepDeeper) chatCtx.deeper = 0; chatCtx.topic = r.topic; }
+  }
+
   // ---- answer -------------------------------------------------------------
   var SMALL = [
     [/^(hi|hello|hey|hii+|good (morning|afternoon|evening)|namaste)\b/i, 'Hello! 👋 What would you like to know about studying in the UK? You can ask about visas, universities, scholarships, loans, family relocation or our services.'],
@@ -2068,26 +2398,53 @@
     [/\b(bye|goodbye|see you)\b/i, 'Good luck with your UK plans! You can come back and ask anything any time.']
   ];
   function kbById(id) { for (var i = 0; i < KB.length; i++) if (KB[i].id === id) return KB[i]; return null; }
-  function fromKB(id, extra) { var e = kbById(id); return { text: e.a + (extra || ''), sec: e.sec, form: e.form }; }
+  function fromKB(id, extra) { var e = kbById(id); return { text: e.a + (extra || ''), sec: e.sec, form: e.form, topic: id }; }
   function answer(text) {
-    var q = text.trim(), qt = tokens(q), specific = SPECIFIC.test(q);
+    var raw = String(text || '').trim(), r;
     kbIndex();   // picks up the live lender list and news headlines
-    for (var i = 0; i < SMALL.length; i++) if (SMALL[i][0].test(q) && qt.length <= 3) return { text: SMALL[i][1] };
+    for (var i = 0; i < SMALL.length; i++) if (SMALL[i][0].test(raw) && tokens(raw).length <= 3) { r = { text: SMALL[i][1], small: true }; r.next = nextFor(r); return r; }
+    var fix = correctTypos(raw);
+    r = answerCore(fix.q);
+    if (fix.fixes.length && !r.unknown) r.text = 'I read ' + fix.fixes.map(function (f) { return '“' + f[0] + '” as **' + f[1] + '**'; }).join(', ') + '.\n\n' + r.text;
+    remember(r);
+    r.next = nextFor(r);
+    return r;
+  }
+  function answerCore(q) {
+    var qt = tokens(q), specific = SPECIFIC.test(q);
     // who / what is Tutee Connect (the brand words are stop-words for search)
     if (/\b(who|what)\s+(are|r)\s+(you|u)\b|\b(what|who)\s+is\s+tutee|\babout\s+(tutee|your\s+company|you\s+guys)\b|\btutee\s*connect\b\s*\??$/i.test(q)) {
-      return { text: (/\bwho\s+(are|r)\s+(you|u)\b/i.test(q) ? "I'm **Tutee AI**, the assistant for this page — I answer from everything on it.\n\n" : '') + kbById('about').a, sec: '#welcome' };
+      return { text: (/\bwho\s+(are|r)\s+(you|u)\b/i.test(q) ? "I'm **Tutee AI**, the assistant for this page — I answer from everything on it.\n\n" : '') + kbById('about').a, sec: '#welcome', topic: 'about' };
+    }
+    // "tell me more" about the last answer
+    if (/^(tell me |tell |say )?more( please)?[.?!]*$|^(go on|continue|elaborate|more details?|explain( more| further)?)[.?!]*$/i.test(q)) {
+      if (chatCtx.uni) return uniAnswer(chatCtx.uni);
+      var deeper = morePassage();
+      if (deeper) return deeper;
+      if (chatCtx.topic) return { text: 'That\'s everything this page says about it. A counsellor can go further for your case: ' + askLink('Request a callback') + '.', topic: chatCtx.topic, keepDeeper: true };
     }
     // a named lending partner: "do you have Tata Capital?"
     var lend = lenders().filter(function (n) { var key = n.toLowerCase().replace(/\b(bank|loan|finance|financing|first)\b/g, '').trim().split(/\s+/)[0]; return key.length > 2 && new RegExp('\\b' + key.replace(/[^a-z0-9]/g, '') + '\\b', 'i').test(q); });
-    if (lend.length) return { text: 'Yes — **' + lend.join('** and **') + '** ' + (lend.length > 1 ? 'are' : 'is') + ' among our education-loan partners.\n\n' + kbById('loan').a, sec: '#financial-aid' };
+    if (lend.length) return { text: 'Yes — **' + lend.join('** and **') + '** ' + (lend.length > 1 ? 'are' : 'is') + ' among our education-loan partners.\n\n' + kbById('loan').a, sec: '#financial-aid', topic: 'loan' };
+    // comparisons: "Oxford vs Cambridge", "compare it with UCL", "London or Manchester?"
+    if (COMPARE.test(q)) {
+      var cu = findUnis(q);
+      if (cu.length === 1 && chatCtx.uni && BACKREF.test(q) && cu[0].name !== chatCtx.uni.name) cu.unshift(chatCtx.uni);
+      if (cu.length >= 2) return compareUnis(cu.slice(0, 4));
+      var cp = findPlaces(q);
+      if (cp.length >= 2) return comparePlaces(cp.slice(0, 4));
+    }
+    // follow-ups on the last list: "which of these are Russell Group?", "the top three"
+    var ref = refine(q);
+    if (ref) return ref;
     // counts: "how many universities (in Scotland / are Russell Group)"
-    if (/\bhow many\b.*\b(universit\w*|unis?|institutions?|colleges?)\b/i.test(q) && window.UK_UNIVERSITIES) {
+    if (/\bhow many\b.*\b(universit\w*|unis?|institutions?|colleges?|russell)\b/i.test(q) && window.UK_UNIVERSITIES) {
       var all = window.UK_UNIVERSITIES, pl = findPlace(q), sub = all, label = 'in the UK';
-      if (pl) { sub = unisIn(pl); label = 'in ' + pl.replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+      if (pl) { sub = unisIn(pl); label = 'in ' + cap(pl); }
       var rg = /russell/i.test(q);
       if (rg) { sub = sub.filter(function (u) { return u.type === 'Russell Group'; }); }
       var byType = {}; sub.forEach(function (u) { byType[u.type] = (byType[u.type] || 0) + 1; });
-      return { text: 'This site lists **' + sub.length + (rg ? ' Russell Group' : '') + ' institutions ' + label + '**' + (rg ? '.' : ':\n' + Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; }).map(function (t) { return '• ' + t + ': ' + byType[t]; }).join('\n')) + '\n\nThe universities page lets you filter them by course, area and type.', more: pl || (rg ? 'Russell Group' : null) };
+      return { text: 'This site lists **' + sub.length + (rg ? ' Russell Group' : '') + ' institutions ' + label + '**' + (rg ? '.' : ':\n' + Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; }).map(function (t) { return '- ' + t + ': ' + byType[t]; }).join('\n')) + '\n\nThe universities page lets you filter them by course, area and type.', more: pl || (rg ? 'Russell Group' : null), list: sub.slice().sort(byRank), label: (rg ? 'Russell Group universities ' : 'Universities ') + label, place: pl };
     }
     // study levels: "can I do a PhD / MBA / masters?"
     if (/\b(can|could)\s+i\s+(do|study|pursue|apply\s+for|get)\b.*\b(phd|mba|master|masters|msc|ma|bachelor|bachelors|undergrad\w*|degree|doctorate)\b|\b(is|are)\s+(an?\s+)?(mba|phd|masters?|undergrad\w*)\b.*\bavailable\b/i.test(q) && !/\b(family|wife|husband|spouse|kids|children|dependants?|after)\b/i.test(q)) return fromKB('levels');
@@ -2095,34 +2452,44 @@
     // settling-in tasks, not loans ('bank' alone would pull the loan answer)
     if (/\b(bank\s+account|gp|nhs|national\s+insurance|ni\s+number|evisa|brp)\b/i.test(q)) return fromKB('accom');
     if (/\bafter\s+(my\s+)?(graduation|graduating|degree|studies|course)\b/i.test(q) && !/skilled/i.test(q)) return fromKB('graduate');
-    // "universities in <place>" (checked first: "in Oxford" is a place, not the university)
-    var place = findPlace(q);
-    if (place && /\b(universities|unis|colleges|institutions|options)\b|\b(univ\w*|colleges?)\s+(in|near|at|around)\b/i.test(q)) {
-      var list = unisIn(place);
-      if (list.length) {
-        var name = place.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
-        var shown = list.slice(0, 6).map(function (x) { return '• ' + (x.ranked ? '#' + x.rank + ' ' : '') + x.name; }).join('\n');
-        return { text: 'Universities in **' + name + '** on this site:\n' + shown + (list.length > 6 ? '\n…and ' + (list.length - 6) + ' more on the universities page.' : '') + '\n\nAsk me about any of them, or open one to see its details.', more: list.length > 6 || !window.UK_UNIVERSITIES ? place : null };
-      }
+    // "student visa" questions that aren't about work, family or refusals ('work' alone pulls the Skilled Worker answer)
+    if (/\bstudent\s+visa\b/i.test(q) && !/\b(part.?time|job|jobs|hours|skilled|graduate|family|dependants?|spouse|refus\w*|success)\b/i.test(q)) return fromKB('visa');
+    if (/\b(what|which)\b.*\b(need|required|documents?)\b.*\b(apply|application|admission)\b|\b(requirements?|eligib\w*)\b.*\b(apply|admission|uk)\b/i.test(q)) return fromKB('require');
+    if (/\bmerit\b/i.test(q) && !findUni(q)) return fromKB('merit');
+    // "universities in <place>" (checked first: "in Oxford" is a place, not the
+    // university), also as a follow-up: "what about Glasgow?", "and Leeds?"
+    var place = findPlace(q), named = findUni(q);
+    // after a list, "what about Glasgow?" means the place, not the University of Glasgow
+    var placeFollow = place && (/^(and|what about|how about|ok what about|in)\b/i.test(q) || qt.length <= 1) && (!named || (chatCtx.list && !chatCtx.uni));
+    if (place && (placeFollow || /\b(universities|unis|colleges|institutions|options)\b|\b(univ\w*|colleges?)\s+(in|near|at|around)\b/i.test(q))) {
+      var pList = unisIn(place), bits = [];
+      var pSub = findSubject(q, true) || (placeFollow ? chatCtx.subject : null);
+      if (/\brussell\b/i.test(q)) { pList = pList.filter(function (x) { return x.type === 'Russell Group'; }); bits.push('Russell Group'); }
+      if (pSub) pList = pList.filter(function (x) { return knownFor(x, pSub); });
+      var pLabel = (bits.length ? 'Russell Group universities' : 'Universities') + ' in ' + cap(place) + (pSub ? ' known for ' + pSub : '');
+      if (pList.length) { var pa = listAnswer(pList, pLabel, place); pa.place = place; pa.subject = pSub || null; return pa; }
+      if (pSub || bits.length) return { text: 'This site doesn\'t list a university in ' + cap(place) + (pSub ? ' known for ' + pSub : '') + (bits.length ? ' in the Russell Group' : '') + '. ' + askLink('See all universities in ' + cap(place), 'Universities in ' + place) + ', or ask an advisor.', place: place };
     }
-    // a named university
-    var u = findUni(q);
+    // a university: named, or "it" / "there" after one was discussed
+    var u = named;
+    if (!u && chatCtx.uni && FACET.test(q) && (BACKREF.test(q) || qt.length <= 2)) u = chatCtx.uni;
     if (u) {
+      if (!specific) { var fa = facetAnswer(u, q); if (fa) return fa; }
       var ua = uniAnswer(u);
       if (specific) ua.text = 'Fees and exact entry requirements for ' + u.name + ' aren\'t listed on this page — an advisor can give you those for your course.\n\n' + ua.text;
       return ua;
     }
     // "best universities for <subject>"
-    var subj = /\b(loans?|banks?|lenders?|visas?|scholarships?|grants?|fees?|bursar\w*)\b/i.test(q) ? null : findSubject(q);
+    var subj = /\b(loans?|banks?|lenders?|visas?|scholarships?|grants?|fees?|bursar\w*|tests?|exams?|ielts|pte|toefl|languagecert|prepare|preparation|coaching)\b/i.test(q) ? null : findSubject(q);
     if (subj) {
       var exact = function (x) { return String(x.programs || '').toLowerCase().split(',').some(function (p) { return p.trim() === subj; }) ? 0 : 1; };
-      var by = uniData().filter(function (x) { return String(x.programs || '').toLowerCase().indexOf(subj) !== -1; }).sort(function (a, b) { return (exact(a) - exact(b)) || ((a.ranked ? a.rank : 1e9) - (b.ranked ? b.rank : 1e9)); });
-      if (by.length) return { text: 'Universities on this site known for **' + subj + '**:\n' + by.slice(0, 6).map(function (x) { return '• ' + (x.ranked ? '#' + x.rank + ' ' : '') + x.name; }).join('\n') + (by.length > 6 ? '\n…and ' + (by.length - 6) + ' more.' : '') + '\n\nEntry requirements depend on the course — an advisor checks them against your profile.', more: (by.length > 6 || !window.UK_UNIVERSITIES) ? subj : null };
+      var by = uniData().filter(function (x) { return knownFor(x, subj); }).sort(function (a, b) { return (exact(a) - exact(b)) || byRank(a, b); });
+      if (by.length) { var sa = listAnswer(by, 'Universities known for ' + subj, subj); sa.text += ' Entry requirements depend on the course; an advisor checks them against your profile.'; sa.subject = subj; return sa; }
     }
     var ranked = scoreKB(qt);
     if (/\b(cost|costs|fees?|price|tuition|expens\w*|afford\w*|money|budget)\b/i.test(q) && !/\b(scholarship|grant|bursar|waiver|loan)/i.test(q)) ranked.forEach(function (r) { if (r.e.id === 'cost') r.s += 2.5; });
     ranked.sort(function (a, b) { return b.s - a.s; });
-    var top = ranked[0], second = ranked[1];
+    var top = ranked[0];
     // "Do you offer GRE coaching?": the only overlap is a generic word and the
     // real subject never appears on the page → say so instead of guessing
     if (top && top.s >= 2) {
@@ -2135,15 +2502,42 @@
       // two topics in one question ("visa and loans") get both answers
       if (/\band\b|\balso\b|,/i.test(q)) ranked.slice(1, 3).forEach(function (r) { if (r.s >= 2 && r.s >= top.s * 0.5) txt += '\n\n' + r.e.a; });
       if (specific && !top.e.specific) txt += '\n\n' + ADVISOR_NOTE;
-      return { text: txt, sec: top.e.sec, form: top.e.form };
+      return { text: txt, sec: top.e.sec, form: top.e.form, topic: top.e.id };
     }
     var hit = qt.length ? searchPage(qt) : null;
     if (hit) return { text: (hit.title ? '**' + hit.title.trim() + '**\n' : '') + hit.text + (specific ? '\n\n' + ADVISOR_NOTE : ''), el: hit.el };
-    return { unknown: true, text: 'I couldn\'t find that on this page. For anything beyond what\'s here, our advisors can help — message us on WhatsApp, or book a free consultation and a counsellor will answer it for your profile.' };
+    return { unknown: true, text: 'I couldn\'t find that on this page, and I\'d rather not guess. A counsellor can answer it for your profile: request a callback, message us on WhatsApp, or book a free consultation.' };
   }
 
+  /* Safe markdown for answers: **bold**, links to this site's sections and
+     pages, WhatsApp, "ask:" links that ask Tutee AI a question, bullet and
+     numbered lists, and paragraphs. Everything else is escaped text. */
+  function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+  function mdInline(s) {
+    return esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, t, h) {
+      h = h.replace(/&amp;/g, '&');
+      if (/^ask:/.test(h)) { var qq = ''; try { qq = decodeURIComponent(h.slice(4)); } catch (e) { return t; } return '<a href="#" class="msg-ask" data-ask="' + escAttr(qq) + '">' + t + '</a>'; }
+      if (/^#[\w-]+$/.test(h)) return '<a href="' + h + '" data-jump>' + t + '</a>';
+      if (/^\.\/(index|universities)\.html(\?[^#\s"]*)?(#[\w-]+)?$/.test(h) || /^https:\/\/wa\.me\/\d+$/.test(h)) return '<a href="' + escAttr(h) + '" target="_blank" rel="noopener">' + t + '</a>';
+      return t;
+    });
+  }
   function md(s) {
-    return esc(s).split(/\n{2,}/).map(function (p) { return '<p>' + p.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>') + '</p>'; }).join('');
+    var out = [], items = null, kind = '';
+    function flush() { if (items) { out.push('<' + kind + '>' + items.join('') + '</' + kind + '>'); items = null; } }
+    String(s).split('\n').forEach(function (line) {
+      var l = line.trim(), m;
+      if (!l) { flush(); return; }
+      if ((m = l.match(/^[•\-]\s+(.*)$/)) || (m = l.match(/^\d+\.\s+(.*)$/))) {
+        var k = /^\d/.test(l) ? 'ol' : 'ul';
+        if (kind !== k) flush();
+        kind = k; (items = items || []).push('<li>' + mdInline(m[1]) + '</li>');
+        return;
+      }
+      flush(); out.push('<p>' + mdInline(l) + '</p>');
+    });
+    flush();
+    return out.join('');
   }
   function initChat() {
     var panel = $('[data-chat]'), launcher = $('[data-chat-open]');
@@ -2152,11 +2546,24 @@
     var form = $('[data-chat-form]', panel), input = $('[data-chat-input]', panel), send = $('[data-chat-send]', panel);
     var seeded = false, small = window.matchMedia('(max-width: 640px)');
     kbIndex();
+    /* The conversation is kept for this browser tab (sessionStorage), so it
+       survives a reload or a move between the home and universities pages.
+       Callback details (name, phone, email) are never written to it. */
+    var STORE = 'tc_uk_chat', log = [], lastNext = [];
+    function save() {
+      var c = {};
+      Object.keys(chatCtx).forEach(function (k) { c[k] = chatCtx[k]; });
+      if (c.list) c.list = c.list.slice(0, 60);
+      try { sessionStorage.setItem(STORE, JSON.stringify({ log: log.slice(-40), next: lastNext, ctx: c, answered: answered })); } catch (e) { /* storage unavailable */ }
+    }
     function clock() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-    function push(who, content, actions) {
-      var m = document.createElement('div');
+    function push(who, content, actions, opts) {
+      opts = opts || {};
+      var m = document.createElement('div'), time = opts.time || clock();
       m.className = 'msg ' + who;
-      m.innerHTML = md(content) + '<time>' + clock() + '</time>';
+      // the visitor's own words are shown as typed, never as markup
+      m.innerHTML = (who === 'ai' ? md(content) : '<p>' + esc(content) + '</p>') + '<time>' + time + '</time>';
+      if (opts.keep) log.push({ who: who, text: content, time: time });
       if (actions && actions.length) {
         var row = document.createElement('div');
         row.className = 'msg-actions';
@@ -2171,14 +2578,47 @@
         m.insertBefore(row, $('time', m));
       }
       list.insertBefore(m, who === 'ai' && !seeded ? chips : typing);
-      if (hasGsap && !reduce) G.from(m, { y: 14, opacity: 0, duration: 0.4, ease: 'expo.out' });
+      if (hasGsap && !reduce && !opts.time) G.from(m, { y: 14, opacity: 0, duration: 0.4, ease: 'expo.out' });
+      list.scrollTop = list.scrollHeight;
+    }
+    // suggested next questions: only the latest set stays tappable
+    function suggest(qs) {
+      lastNext = qs || [];
+      $$('.chat-next', list).forEach(function (n) { n.remove(); });
+      if (!lastNext.length) return;
+      var row = document.createElement('div');
+      row.className = 'chat-chips chat-next';
+      row.setAttribute('aria-label', 'Suggested questions');
+      lastNext.forEach(function (q) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = q;
+        b.addEventListener('click', function () { say(q); });
+        row.appendChild(b);
+      });
+      list.insertBefore(row, typing);
       list.scrollTop = list.scrollHeight;
     }
     function typingOn(on) { typing.classList.toggle('is-on', on); list.scrollTop = list.scrollHeight; }
-    function seed() { if (!seeded) { push('ai', WELCOME); seeded = true; } }
+    function restore() {
+      var s = null;
+      try { s = JSON.parse(sessionStorage.getItem(STORE) || 'null'); } catch (e) { s = null; }
+      if (!s || !s.log || !s.log.length) return false;
+      push('ai', WELCOME, null, { time: s.log[0].time });
+      seeded = true; chips.hidden = true;
+      s.log.forEach(function (e) { push(e.who, e.text, null, { keep: true, time: e.time }); });
+      if (s.ctx) Object.keys(chatCtx).forEach(function (k) { if (k in s.ctx) chatCtx[k] = s.ctx[k]; });
+      answered = s.answered || 0;
+      suggest(s.next);
+      return true;
+    }
+    function seed() { if (!seeded && !restore()) { push('ai', WELCOME); seeded = true; } }
     function open() { loadUniData(); seed(); panel.classList.add('is-open'); panel.setAttribute('aria-hidden', 'false'); launcher.setAttribute('aria-expanded', 'true'); launcher.classList.add('is-hidden'); setTimeout(function () { input.focus(); }, 250); }
     function close() { panel.classList.remove('is-open'); panel.setAttribute('aria-hidden', 'true'); launcher.setAttribute('aria-expanded', 'false'); launcher.classList.remove('is-hidden'); }
-    function reset() { $$('.msg', list).forEach(function (n) { n.remove(); }); seeded = false; chips.hidden = false; input.value = ''; sync(); typingOn(false); seed(); }
+    function reset() {
+      $$('.msg, .chat-next', list).forEach(function (n) { n.remove(); }); seeded = false; stage = 'idle'; chips.hidden = false;
+      log = []; lastNext = []; answered = 0;
+      chatCtx = { uni: null, list: null, label: '', more: null, place: null, subject: null, topic: null, deeper: 0 };
+      try { sessionStorage.removeItem(STORE); } catch (e) { /* storage unavailable */ } input.value = ''; sync(); typingOn(false); seed(); }
     function sync() { send.disabled = !input.value.trim(); }
     function showMe(target) {
       return function () {
@@ -2195,6 +2635,7 @@
       var a = [];
       if (r.unknown) {
         a.push({ label: 'Message an advisor', href: WA_URL, hot: true });
+        a.push({ label: 'Request a callback', fn: function () { say('Request a callback'); } });
         a.push({ label: 'Book a free consultation', fn: function () { close(); goToForm(); } });
         return a;
       }
@@ -2211,19 +2652,88 @@
       if (/advisor can confirm/.test(r.text)) a.push({ label: 'Ask an advisor', href: WA_URL });
       return a;
     }
+    /* Lead capture in the chat (as on the Finland and New Zealand pages):
+       "Request a callback", "talk to a counsellor", "call me"… asks for name,
+       phone and email, then sends them to this site's /api/enquiry, which adds
+       them to the UK Leads sheet and emails the team. Nothing is sent unless
+       the visitor types their details; "cancel" stops it at any point. */
+    var LEAD_RE = /^(request a (call ?back|callback)|evaluate my profile|talk to a counsell?or|book a (free )?(consultation|call|counselling call)|call me( back)?|i want to (talk|speak) to (a|someone|someone from your team|a counsell?or))\b|\b(talk|speak) to (a |an )?(human|person|counsell?or|advisor|someone|agent)\b|\bcall ?back\b/i;
+    var stage = 'idle', lead = { name: '', phone: '', email: '' };
+    function submitLead() {
+      var ctl = window.AbortController ? new AbortController() : null, t = setTimeout(function () { if (ctl) ctl.abort(); }, 25000);
+      return fetch(ENQUIRY_ENDPOINT, {
+        method: 'POST', signal: ctl ? ctl.signal : undefined,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          subject: 'New Lead from Chatbot!', from_name: 'Tutee AI Counsellor',
+          name: lead.name, phone: lead.phone, email: lead.email,
+          destination: 'Chatbot General Inquiry', form_location: 'Tutee AI chat', page: enquiryPage()
+        })
+      }).then(function (r) { return r.json().catch(function () { return { success: false }; }); })
+        .then(function (res) { clearTimeout(t); return res; }, function (e) { clearTimeout(t); throw e; });
+    }
+    var LEAD_FALLBACK = [{ label: 'Use the form', hot: true, fn: function () { close(); goToForm(); } }, { label: 'WhatsApp us', href: WA_URL }];
+    function leadReply(text, actions) { return { text: text, lead: true, actions: actions || [] }; }
+    // the reply (or a promise of it) while the details flow is running, otherwise null
+    function leadStep(q) {
+      if (stage !== 'idle' && /^(cancel|stop|no thanks|never ?mind|skip)\b/i.test(q)) { stage = 'idle'; return leadReply('No problem, I’ve stopped. What else would you like to know?'); }
+      if (stage !== 'idle' && /\?$/.test(q)) stage = 'idle';   // a question mid-flow: answer it instead
+      if (stage === 'name') {
+        if (!checkName(q).ok) return leadReply('Could you type your **full name**? (Or type **cancel**.)');
+        lead.name = q.slice(0, 120); stage = 'phone';
+        return leadReply('Thanks ' + q.split(/\s+/)[0] + '! What’s the best **phone number** to reach you on? Please include the country code, e.g. +91 98765 43210.');
+      }
+      if (stage === 'phone') {
+        var d = q.replace(/\D/g, '');
+        if (/[^\d\s()+.-]/.test(q) || d.length < 7 || d.length > 15) return leadReply('That doesn’t look like a valid phone number. Please enter it with the country code, e.g. +91 98765 43210, or type **cancel**.');
+        lead.phone = q.slice(0, 40); stage = 'email';
+        return leadReply('Got it. Lastly, what’s your **email address**?');
+      }
+      if (stage === 'email') {
+        if (!checkEmail(q).ok) return leadReply('That doesn’t look like a valid email address. Could you check it, or type **cancel**?');
+        lead.email = q.slice(0, 200); stage = 'idle';
+        return submitLead().then(function (res) {
+          return res && res.success
+            ? leadReply('✅ **Done!** A counsellor will contact you within one working day.\n\nAnything else I can help with in the meantime?')
+            : leadReply('Sorry, that didn’t go through. Please use the consultation form or WhatsApp us.', LEAD_FALLBACK);
+        }, function () { return leadReply('Network error while sending. Please use the consultation form or WhatsApp us.', LEAD_FALLBACK); });
+      }
+      if (LEAD_RE.test(q)) {
+        stage = 'name'; lead = { name: '', phone: '', email: '' };
+        return leadReply('Happy to set that up. A counsellor reviews your profile personally and replies within **one working day**.\n\nWhat’s your **full name**? (Type **cancel** any time to stop.)');
+      }
+      return null;
+    }
     function say(text) {
       text = (text || '').trim();
       if (!text) return;
-      push('me', text); input.value = ''; sync(); chips.hidden = true;
+      // messages that belong to a callback request (name, phone, email) are not kept
+      var private_ = stage !== 'idle' || LEAD_RE.test(text);
+      push('me', text, null, { keep: !private_ }); input.value = ''; input.style.height = ''; input.style.overflowY = 'hidden'; sync(); chips.hidden = true;
+      suggest([]);
       typingOn(true);
       // the full university list (499) is fetched on the first question only
       var pause = new Promise(function (r) { setTimeout(r, reduce ? 0 : 450 + Math.min(500, text.length * 6)); });
       Promise.all([loadUniData(), pause]).then(function () {
+        var step = leadStep(text);
+        return step === null ? answer(text) : step;
+      }).then(function (r) {
         typingOn(false);
-        var r = answer(text);
-        push('ai', r.text, actionsFor(r));
+        push('ai', r.text, r.lead ? r.actions : actionsFor(r), { keep: !r.lead });
+        suggest(r.lead ? [] : r.next);
+        save();
       });
     }
+    // links inside answers: "ask:" links ask the question, section links scroll to it
+    list.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[data-ask], a[data-jump]');
+      if (!a) return;
+      e.preventDefault();
+      if (a.hasAttribute('data-ask')) { say(a.getAttribute('data-ask')); return; }
+      var h = a.getAttribute('href');
+      if (h === '#contact') { close(); goToForm(); return; }
+      showMe(h)();
+    });
     launcher.addEventListener('click', open);
     $$('[data-chat-open-inline]').forEach(function (b) { b.addEventListener('click', open); });
     $('[data-chat-close]', panel).addEventListener('click', close);
@@ -2235,7 +2745,9 @@
         say(c.textContent);
       });
     });
-    input.addEventListener('input', function () { sync(); input.style.height = 'auto'; input.style.height = Math.min(110, input.scrollHeight) + 'px'; });
+    // grows with the text; a scrollbar only once it passes the maximum height
+    input.addEventListener('input', function () { sync(); input.style.height = 'auto'; input.style.height = Math.min(110, input.scrollHeight) + 'px'; input.style.overflowY = input.scrollHeight > 110 ? 'auto' : 'hidden'; });
+    input.style.overflowY = 'hidden';
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); say(input.value); } });
     form.addEventListener('submit', function (e) { e.preventDefault(); say(input.value); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel.classList.contains('is-open')) close(); });

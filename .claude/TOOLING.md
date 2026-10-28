@@ -27,12 +27,14 @@ works, so no approval is needed.
 Plugins are recorded in `~/.claude/settings.json`; the chrome-devtools server in `~/.claude.json`
 (local scope for this project).
 
-## Lead pipeline (verified 15 Oct 2026)
+## Lead pipeline (verified 28 Oct 2026)
 
-Form → `POST /api/enquiry` (`netlify/functions/enquiry.mjs`) → Apps Script (`APPS_SCRIPT_URL`,
-`APPS_SCRIPT_SECRET`, Netlify env) → Google Sheet row + email to digital@tuteeconnect.com.
-Verified locally against a mock Apps Script: valid lead forwarded with all fields; bad name, phone,
-email, dead mail domain and honeypot rejected. A live end-to-end test needs the owner's approval.
+Form and Tutee AI chat → `POST /api/enquiry` (`netlify/functions/enquiry.mjs`, same as the Finland,
+New Zealand and Poland sites) → the shared Website Leads Apps Script (`APPS_SCRIPT_URL`,
+`APPS_SCRIPT_TOKEN` = the script's `LEADS_TOKEN_UK`, `SITE_COUNTRY=UK`, Netlify env) → a row in the
+"UK Leads" tab + an email to business@tuteeconnect.com. Resend only if the script can't be reached.
+Setup: `apps-script/README.md`. Verified locally with `tools/dev/serve-with-api.mjs`, whose stand-in
+runs the real `apps-script/Code.gs`. A live end-to-end test needs the owner's approval.
 
 ## Figma (history)
 

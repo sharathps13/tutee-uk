@@ -299,7 +299,7 @@ assets/js/universities.js       universities.html directory (filters, Flip grid,
 assets/js/services-data.js      the 9 service tabs: title, tagline, body copy, icon
 assets/js/universities-data.js  499 UK institutions (universities, colleges, specialist providers)
 assets/img/...                  logos, photos, lender logos
-api/enquiry.py                  serverless function: emails enquiries to business@tuteeconnect.com
+netlify/functions/enquiry.mjs   /api/enquiry: forwards leads to the Website Leads Apps Script
 ```
 
 No build step and no dependencies — open `index.html` or drop the folder on any static host.
@@ -323,8 +323,8 @@ React's interactivity was reimplemented in `assets/js/main.js`. Elements are add
 | Services (mobile) | bottom sheet with prev/next, dots, swipe, Esc |
 | Universities / testimonials carousels | mobile snap scroll, dots synced by observer (threshold 0.6, 50 ms debounce) |
 | FAQ | single-open accordion, separate desktop and mobile presentations |
-| Lead forms | POST to our own `/api/enquiry` serverless function, which emails business@tuteeconnect.com; email + phone validation, success/error states |
-| AI counsellor panel | (old build — replaced by the page-grounded Tutee AI described above; no lead capture) |
+| Lead forms | POST to our own `/api/enquiry` serverless function, which adds the lead to the "UK Leads" tab of the Website Leads sheet and emails business@tuteeconnect.com (see `apps-script/README.md`); live email + phone validation, "Form completed" panel remembered for 30 days |
+| AI counsellor panel | the page-grounded Tutee AI described above; "Request a callback" collects name, phone and email and sends them to `/api/enquiry` |
 | Directory | live search, load-more in 20s, multi-select, sticky selection bar, application modal |
 | Marquee / float / ping / bounce | pure CSS, unchanged from the reference |
 
@@ -391,12 +391,12 @@ React's interactivity was reimplemented in `assets/js/main.js`. Elements are add
      affordance. This is the one intentional visual change — it affects the cursor only, nothing
      else. `verify_site.py` checks both properties and will fail on any button lacking a handler.
 
-7. **Enquiry email.** The form posts to our own serverless function at `/api/enquiry`, which
-   sends the enquiry to **business@tuteeconnect.com**. The recipient is a hard-coded constant in
-   `api/enquiry.py` and the SMTP credentials are server-side environment variables, so nothing
-   secret is in the page. **This needs a host that runs functions (Vercel)** — on a purely static
-   host `/api/enquiry` 404s and the form shows its error message. Setup, env vars and local testing:
-   see `_tooling/ENQUIRY_SETUP.md`.
+7. **Enquiry email.** The form and the chat post to our own Netlify function at `/api/enquiry`
+   (`netlify/functions/enquiry.mjs`), which forwards each lead to the shared Website Leads Apps
+   Script: a row in the "UK Leads" tab and an email to **business@tuteeconnect.com**. The script
+   URL and this site's token are Netlify environment variables, so nothing secret is in the page.
+   On a purely static host `/api/enquiry` 404s and the form shows its error message. Setup and env
+   vars: `apps-script/README.md`.
 
 ## Running it locally
 

@@ -1,227 +1,274 @@
 /**
- * Tutee Connect — UK Landing Page leads → Google Sheet + email.
+ * Tutee Connect — website leads → Google Sheets + email.
  *
- * Receives each consultation request from the Netlify function
- * (netlify/functions/enquiry.mjs), appends it to the sheet and emails it to
- * NOTIFY_TO. See apps-script/README.md for the one-time setup.
+ * Paste this into its own standalone Apps Script project (script.google.com),
+ * linked to the "Website Leads" spreadsheet with setSheetId(). Setup steps
+ * are in apps-script/README.md next to this file.
  *
- * Script property (Project Settings → Script properties):
- *   SHARED_SECRET   must equal APPS_SCRIPT_SECRET in Netlify
- *   SHEET_ID        optional; only needed if this script is NOT bound to the sheet
+ * The landing page never calls this script directly. The form posts to the
+ * site's own /api/enquiry function, which forwards the lead here with a token,
+ * so the web-app URL and token stay out of the browser.
+ *
+ * Tokens: each country site can have its own token, saved in Script Properties
+ * as LEADS_TOKEN_<COUNTRY> (e.g. LEADS_TOKEN_NEW_ZEALAND, LEADS_TOKEN_POLAND,
+ * LEADS_TOKEN_UK). Once a country has
+ * its own token, only that token is accepted for that country's leads, and it
+ * cannot be used to write into another country's tab. A country without its own
+ * token (Finland today) keeps using the shared LEADS_TOKEN, exactly as before.
+ *
+ * Each lead becomes one row in the "Finland Leads" tab, with the same columns
+ * as the sheet: Date, Time, Full Name, Phone Number, Email, State, Shortlisted
+ * Universities, Course, Lead Source, Preferred Call Time. It is also emailed,
+ * neatly formatted, to business@tuteeconnect.com with Reply-To set to the student.
  */
 
-var CONFIG = {
-  NOTIFY_TO: 'digital@tuteeconnect.com',
-  SHEET_NAME: 'UK Leads',
-  TIMEZONE: 'Asia/Kolkata',
-  SENDER_NAME: 'Tutee Connect Website'
-};
+var MAIL_TO = 'business@tuteeconnect.com';
+var TIME_ZONE = 'Asia/Kolkata';
+var DEFAULT_TAB = 'Finland Leads';
+var HEADERS = ['Date', 'Time', 'Full Name', 'Phone Number', 'Email', 'State',
+  'Shortlisted Universities', 'Course', 'Lead Source', 'Preferred Call Time'];
+var WIDTHS = [100, 90, 180, 150, 230, 150, 320, 240, 260, 190];
+var HEADER_BG = '#0b3d3a';
 
-// Column order in the sheet.
-var COLUMNS = [
-  ['Timestamp', 'timestamp'],
-  ['Full Name', 'full_name'],
-  ['Phone Number', 'phone'],
-  ['Email', 'email'],
-  ['Additional Notes', 'notes'],
-  ['Shortlisted Universities', 'shortlist'],
-  ['State', 'state'],
-  ['Source Page', 'source_page']
-];
+/** Run once from the editor: creates and formats the Finland Leads tab. */
+function setupFinlandLeads() {
+  var sheet = getLeadsSheet_(DEFAULT_TAB);
+  try { getSpreadsheet_().setActiveSheet(sheet); } catch (e) { /* standalone project */ }
+  return 'Ready: ' + sheet.getName();
+}
 
-/* ------------------------------------------------------------- web app */
+/** Run once from the editor to store the shared token (paste your own value). */
+function setToken() {
+  var token = 'PASTE-A-LONG-RANDOM-TOKEN-HERE';
+  if (/PASTE/.test(token)) throw new Error('Replace the placeholder with your own token first.');
+  PropertiesService.getScriptProperties().setProperty('LEADS_TOKEN', token);
+  return 'Token saved.';
+}
 
+/** Run once from the editor to give the New Zealand site its own token. Paste a
+ *  new long random value (30+ letters and numbers), run this, then delete the
+ *  value from the code again. The same value goes in the New Zealand site's
+ *  APPS_SCRIPT_TOKEN on Netlify. */
+function setNewZealandToken() {
+  var token = 'PASTE-A-NEW-LONG-RANDOM-TOKEN-HERE';
+  if (/PASTE/.test(token)) throw new Error('Replace the placeholder with your own token first.');
+  if (token === PropertiesService.getScriptProperties().getProperty('LEADS_TOKEN')) throw new Error('Use a different token from the shared LEADS_TOKEN.');
+  PropertiesService.getScriptProperties().setProperty(tokenKey_('New Zealand'), token);
+  return 'Saved as ' + tokenKey_('New Zealand') + '.';
+}
+
+/** Run once from the editor to give the Poland site its own token. Paste a
+ *  new long random value (30+ letters and numbers), run this, then delete the
+ *  value from the code again. The same value goes in the Poland site's
+ *  APPS_SCRIPT_TOKEN on Netlify. */
+function setPolandToken() {
+  var token = 'PASTE-A-NEW-LONG-RANDOM-TOKEN-HERE';
+  if (/PASTE/.test(token)) throw new Error('Replace the placeholder with your own token first.');
+  var props = PropertiesService.getScriptProperties();
+  if (token === props.getProperty('LEADS_TOKEN')) throw new Error('Use a different token from the shared LEADS_TOKEN.');
+  if (token === props.getProperty(tokenKey_('New Zealand'))) throw new Error('Use a different token from the New Zealand token.');
+  props.setProperty(tokenKey_('Poland'), token);
+  return 'Saved as ' + tokenKey_('Poland') + '.';
+}
+
+/** Run once from the editor to give the UK site its own token. Paste a
+ *  new long random value (30+ letters and numbers), run this, then delete the
+ *  value from the code again. The same value goes in the UK site's
+ *  APPS_SCRIPT_TOKEN on Netlify. */
+function setUKToken() {
+  var token = 'PASTE-A-NEW-LONG-RANDOM-TOKEN-HERE';
+  if (/PASTE/.test(token)) throw new Error('Replace the placeholder with your own token first.');
+  var props = PropertiesService.getScriptProperties();
+  if (token === props.getProperty('LEADS_TOKEN')) throw new Error('Use a different token from the shared LEADS_TOKEN.');
+  ['New Zealand', 'Poland'].forEach(function (c) {
+    if (token === props.getProperty(tokenKey_(c))) throw new Error('Use a different token from the ' + c + ' token.');
+  });
+  props.setProperty(tokenKey_('UK'), token);
+  return 'Saved as ' + tokenKey_('UK') + '.';
+}
+
+/** Run from the editor after changing tokens: shows which countries have their
+ *  own token and which use the shared one (values are never printed). */
+function checkTokens() {
+  var props = PropertiesService.getScriptProperties();
+  var out = ['Shared LEADS_TOKEN: ' + (props.getProperty('LEADS_TOKEN') ? 'set' : 'MISSING')];
+  ['Finland', 'New Zealand', 'Poland', 'UK'].forEach(function (c) {
+    out.push(c + ': ' + (props.getProperty(tokenKey_(c)) ? 'own token (' + tokenKey_(c) + ')' : 'uses the shared LEADS_TOKEN'));
+  });
+  console.log(out.join(' | '));
+  return out.join(' | ');
+}
+
+/** "New Zealand" → "LEADS_TOKEN_NEW_ZEALAND". */
+function tokenKey_(country) {
+  return 'LEADS_TOKEN_' + String(country || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+/** The token a lead for this country must carry: the country's own token if it
+ *  has one, otherwise the shared LEADS_TOKEN. */
+function expectedToken_(country) {
+  var props = PropertiesService.getScriptProperties();
+  return (country && props.getProperty(tokenKey_(country))) || props.getProperty('LEADS_TOKEN');
+}
+
+/** Web-app entry point: the site's /api/enquiry function POSTs JSON here. */
 function doPost(e) {
-  try {
-    var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    var secret = PropertiesService.getScriptProperties().getProperty('SHARED_SECRET');
-    if (!secret || body.secret !== secret) return json_({ ok: false, error: 'unauthorised' });
+  var body = {};
+  try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { return reply_(false, 'Bad JSON'); }
 
-    var lead = normalise_(body);
-    appendRow_(lead);                // the sheet is the record, so it goes first
-    try {
-      sendEmail_(lead);
-    } catch (mailErr) {
-      console.error('email failed: ' + mailErr);   // row is saved; don't fail the visitor
-    }
-    return json_({ ok: true });
-  } catch (err) {
-    console.error('doPost failed: ' + err);
-    return json_({ ok: false, error: 'server error' });
-  }
-}
+  var lead = normalise_(body);
+  var token = expectedToken_(lead.country);
+  if (!token || body.token !== token) return reply_(false, 'Unauthorised');
 
-// Visiting the /exec URL in a browser just confirms the deployment is live.
-function doGet() {
-  return json_({ ok: true, service: 'Tutee Connect UK leads' });
-}
+  if (!lead.name || !lead.email) return reply_(false, 'Missing name or email');
 
-/* ---------------------------------------------------------------- data */
+  var now = new Date();
+  var row = [
+    Utilities.formatDate(now, TIME_ZONE, 'dd/MM/yyyy'),
+    Utilities.formatDate(now, TIME_ZONE, 'hh:mm a'),
+    lead.name, lead.phone, lead.email, lead.state, lead.shortlist,
+    lead.course, lead.source, lead.callTime
+  ].map(safeCell_);
 
-function normalise_(b) {
-  var when = b.submitted_at ? new Date(b.submitted_at) : new Date();
-  if (isNaN(when.getTime())) when = new Date();
-  function s(v, max) { return String(v == null ? '' : v).trim().slice(0, max); }
-  return {
-    date: when,
-    timestamp: formatDate_(when, 'dd MMM yyyy, hh:mm a'),
-    full_name: s(b.full_name, 120),
-    phone: s(b.phone, 40),
-    email: s(b.email, 200),
-    notes: s(b.notes, 1000),
-    shortlist: s(b.shortlist, 600),
-    state: s(b.state, 80),
-    source_page: s(b.source_page, 80) || 'UK Landing Page'
-  };
-}
-
-function sheet_() {
-  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
-  var book = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
-  var sh = book.getSheetByName(CONFIG.SHEET_NAME) || book.insertSheet(CONFIG.SHEET_NAME);
-  if (sh.getLastRow() === 0) {
-    sh.appendRow(COLUMNS.map(function (c) { return c[0]; }));
-    sh.getRange(1, 1, 1, COLUMNS.length).setFontWeight('bold').setBackground('#8e1b1b').setFontColor('#ffffff');
-    sh.setFrozenRows(1);
-  }
-  return sh;
-}
-
-function appendRow_(lead) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var row = COLUMNS.map(function (c) { return c[1] === 'timestamp' ? lead.date : lead[c[1]]; });
-    // a leading + or = would be read as a formula; force plain text
-    row = row.map(function (v) { return typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v; });
-    var sh = sheet_();
-    sh.appendRow(row);
-    sh.getRange(sh.getLastRow(), 1).setNumberFormat('dd mmm yyyy, hh:mm am/pm');
+    getLeadsSheet_(lead.tab).appendRow(row);
   } finally {
     lock.releaseLock();
   }
+
+  var mailed = true, mailError = '';
+  try { sendLeadEmail_(lead, row); } catch (err) { mailed = false; mailError = String(err); console.error('mail failed: ' + err); }
+  return reply_(true, 'Saved', { mailed: mailed, mail_error: mailError });
 }
 
-function sendEmail_(lead) {
-  var mail = buildEmail(lead, sheetUrl_());
+/** Run from the editor to check email on its own: sends a sample lead to
+ *  business@tuteeconnect.com. Any problem (permission, quota) shows in the
+ *  Execution log straight away. */
+function testEmail() {
+  var lead = normalise_({ name: 'Test Lead', phone: '+91 9876543210', email: MAIL_TO, state: 'Tamil Nadu',
+    course: "Master's – Data Science (Next intake)", lead_source: 'Finland Landing Page – test from the editor', call_time: 'Anytime' });
+  var now = new Date();
+  var row = [Utilities.formatDate(now, TIME_ZONE, 'dd/MM/yyyy'), Utilities.formatDate(now, TIME_ZONE, 'hh:mm a'),
+    lead.name, lead.phone, lead.email, lead.state, lead.shortlist, lead.course, lead.source, lead.callTime];
+  sendLeadEmail_(lead, row);
+  return 'Sent. Emails left today: ' + MailApp.getRemainingDailyQuota();
+}
+
+/** Health check, so the setup can be tested from a browser. */
+function doGet() {
+  return reply_(true, 'Tutee Connect leads endpoint is running.');
+}
+
+/* ------------------------------------------------------------- helpers */
+
+function normalise_(b) {
+  var s = function (v, n) { return String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n || 300); };
+  var country = s(b.country, 40);
+  return {
+    tab: country ? country + ' Leads' : DEFAULT_TAB,
+    country: country,
+    name: s(b.name, 120),
+    phone: s(b.phone, 40),
+    email: s(b.email, 200),
+    state: s(b.state, 80) || '—',
+    shortlist: s(b.shortlist, 1500) || '—',
+    course: s(b.course, 300) || '—',
+    source: s(b.lead_source, 300) || 'Website',
+    callTime: s(b.call_time, 80) || 'Not specified',
+    interest: s(b.destination, 600),
+    page: s(b.page, 200)
+  };
+}
+
+/** Text that starts with = + - @ would be read as a formula (a "+91 …" phone
+ *  number included), so it is stored as plain text. */
+function safeCell_(v) {
+  var t = String(v == null ? '' : v);
+  return /^[=+\-@]/.test(t) ? "'" + t : t;
+}
+
+/** The leads tab, created and formatted on first use. */
+function getLeadsSheet_(name) {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(name);
+  if (sheet) return sheet;
+
+  sheet = ss.insertSheet(name);
+  sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+    .setBackground(HEADER_BG).setFontColor('#ffffff').setFontWeight('bold')
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 32);
+  sheet.setFrozenRows(1);
+  WIDTHS.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+  sheet.getRange(2, 1, sheet.getMaxRows() - 1, HEADERS.length).setNumberFormat('@').setVerticalAlignment('top').setWrap(true);
+  sheet.getRange(1, 1, sheet.getMaxRows(), HEADERS.length).createFilter();
+  var extra = sheet.getMaxColumns() - HEADERS.length;
+  if (extra > 0) sheet.deleteColumns(HEADERS.length + 1, extra);
+  return sheet;
+}
+
+function sendLeadEmail_(lead, row) {
+  var rows = HEADERS.map(function (h, i) { return [h, String(row[i]).replace(/^'/, '')]; });
+  if (lead.interest) rows.push(['Interested In', lead.interest]);
+  if (lead.page) rows.push(['Submitted From', lead.page]);
+
+  var cells = rows.map(function (r, i) {
+    return '<tr>' +
+      '<td style="padding:10px 14px;border-bottom:1px solid #e6ece9;background:' + (i % 2 ? '#ffffff' : '#f6f9f8') + ';font-weight:600;color:#0b3d3a;white-space:nowrap;vertical-align:top;width:190px">' + esc_(r[0]) + '</td>' +
+      '<td style="padding:10px 14px;border-bottom:1px solid #e6ece9;background:' + (i % 2 ? '#ffffff' : '#f6f9f8') + ';color:#1f2937;vertical-align:top">' + esc_(r[1]) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  var title = (lead.country || 'Finland') + ' Landing Page';
+  var html =
+    '<div style="font-family:Segoe UI,Arial,sans-serif;max-width:640px;margin:0 auto;color:#1f2937">' +
+      '<div style="background:' + HEADER_BG + ';color:#ffffff;padding:18px 22px;border-radius:12px 12px 0 0">' +
+        '<div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.8">New lead · ' + esc_(title) + '</div>' +
+        '<div style="font-size:20px;font-weight:700;margin-top:4px">' + esc_(lead.name) + '</div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #e6ece9;border-top:0">' + cells + '</table>' +
+      '<p style="font-size:12px;color:#6b7280;margin:14px 2px">Reply to this email to answer ' + esc_(lead.name) + ' directly. ' +
+        'This lead is also saved in the "' + esc_(lead.tab) + '" tab of Website Leads.</p>' +
+    '</div>';
+
+  var text = ['New lead · ' + title, ''].concat(rows.map(function (r) { return r[0] + ': ' + r[1]; })).join('\n');
+
   MailApp.sendEmail({
-    to: CONFIG.NOTIFY_TO,
-    subject: mail.subject,
-    htmlBody: mail.html,
-    body: mail.text,
-    name: CONFIG.SENDER_NAME,
-    replyTo: lead.email
+    to: MAIL_TO,
+    replyTo: lead.email,
+    name: 'Tutee Connect Website',
+    subject: 'New ' + (lead.country || 'Finland') + ' Lead – ' + lead.name,
+    htmlBody: html,
+    body: text
   });
 }
 
-function sheetUrl_() {
-  try { return sheet_().getParent().getUrl() + '#gid=' + sheet_().getSheetId(); } catch (e) { return ''; }
-}
-
-function formatDate_(d, pattern) {
-  return Utilities.formatDate(d, CONFIG.TIMEZONE, pattern);
-}
-
-function json_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-
-/* --------------------------------------------------------------- email */
-/* Plain functions with no Apps Script services, so the exact same template
-   can be rendered outside Google for a preview. */
-
 function esc_(t) {
-  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function buildEmail(lead, sheetUrl) {
-  var name = lead.full_name || 'New lead';
-  var subject = 'New UK lead: ' + name + (lead.state ? ' (' + lead.state + ')' : '');
-  var digits = String(lead.phone || '').replace(/\D/g, '');
-  var dash = '<span style="color:#9aa5a4">Not provided</span>';
+function reply_(ok, message, extra) {
+  var out = { success: ok, message: message };
+  if (extra) Object.keys(extra).forEach(function (k) { out[k] = extra[k]; });
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
 
-  var rows = [
-    ['Full name', esc_(lead.full_name)],
-    ['Phone number', '<a href="tel:+' + digits + '" style="color:#8e1b1b;text-decoration:none;font-weight:700">' + esc_(lead.phone) + '</a>'],
-    ['Email', '<a href="mailto:' + esc_(lead.email) + '" style="color:#8e1b1b;text-decoration:none;font-weight:700">' + esc_(lead.email) + '</a>'],
-    ['State', lead.state ? esc_(lead.state) : dash],
-    ['Shortlisted universities', lead.shortlist ? esc_(lead.shortlist) : dash],
-    ['Submitted', esc_(lead.timestamp)],
-    ['Source page', esc_(lead.source_page)]
-  ];
+/** The Website Leads spreadsheet. A standalone project (script.google.com)
+ *  opens it by the ID saved in SHEET_ID; a project made from the sheet's
+ *  own Extensions menu uses that sheet directly. */
+function getSpreadsheet_() {
+  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+  return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+}
 
-  var rowHtml = rows.map(function (r, i) {
-    return '<tr>'
-      + '<td style="padding:12px 16px;width:38%;font-size:13px;color:#5b6b69;border-top:' + (i ? '1px solid #eef1f0' : '0') + ';vertical-align:top">' + r[0] + '</td>'
-      + '<td style="padding:12px 16px;font-size:14px;color:#0e2422;font-weight:600;border-top:' + (i ? '1px solid #eef1f0' : '0') + ';vertical-align:top">' + r[1] + '</td>'
-      + '</tr>';
-  }).join('');
-
-  var notes = lead.notes
-    ? esc_(lead.notes).replace(/\n/g, '<br>')
-    : '<span style="color:#9aa5a4">No additional notes.</span>';
-
-  function button(href, label, bg, fg) {
-    return '<a href="' + href + '" style="display:inline-block;margin:0 6px 8px 0;padding:11px 18px;border-radius:999px;background:' + bg + ';color:' + fg + ';font-size:14px;font-weight:700;text-decoration:none">' + label + '</a>';
-  }
-
-  var html = ''
-    + '<div style="display:none;max-height:0;overflow:hidden">' + esc_(name) + ' requested a free consultation from the UK Landing Page.</div>'
-    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f5f4;padding:24px 12px;font-family:Segoe UI,Arial,sans-serif">'
-    + '<tr><td align="center">'
-    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e3e8e7">'
-
-    // header
-    + '<tr><td style="background:#061a19;padding:20px 24px">'
-    + '<div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#f5a524;font-weight:700">New consultation request</div>'
-    + '<div style="margin-top:6px;font-size:22px;font-weight:800;color:#ffffff">' + esc_(name) + '</div>'
-    + '<div style="margin-top:4px;font-size:13px;color:#b9c7c5">' + esc_(lead.source_page) + ' &middot; ' + esc_(lead.timestamp) + '</div>'
-    + '</td></tr>'
-
-    // quick actions
-    + '<tr><td style="padding:20px 24px 8px">'
-    + button('tel:+' + digits, 'Call ' + esc_(lead.phone), '#8e1b1b', '#ffffff')
-    + button('https://wa.me/' + digits, 'WhatsApp', '#25d366', '#ffffff')
-    + button('mailto:' + esc_(lead.email), 'Reply by email', '#f5a524', '#061a19')
-    + '</td></tr>'
-
-    // details
-    + '<tr><td style="padding:8px 24px 0">'
-    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eef1f0;border-radius:12px">' + rowHtml + '</table>'
-    + '</td></tr>'
-
-    // notes
-    + '<tr><td style="padding:18px 24px 4px">'
-    + '<div style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8e1b1b;font-weight:700">Additional notes</div>'
-    + '<div style="margin-top:8px;padding:14px 16px;border-radius:12px;background:#f7f9f8;border-left:3px solid #f5a524;font-size:14px;line-height:1.55;color:#0e2422">' + notes + '</div>'
-    + '</td></tr>'
-
-    // footer
-    + '<tr><td style="padding:18px 24px 22px;font-size:12px;color:#7a8a88;line-height:1.5">'
-    + 'This lead has also been saved to the <b>UK Leads</b> sheet'
-    + (sheetUrl ? ' &mdash; <a href="' + esc_(sheetUrl) + '" style="color:#8e1b1b">open the sheet</a>' : '') + '.<br>'
-    + 'Replying to this email goes straight to ' + esc_(lead.email) + '.'
-    + '</td></tr>'
-
-    + '</table></td></tr></table>';
-
-  var text = [
-    'New consultation request — ' + lead.source_page,
-    '',
-    'Full name:                ' + lead.full_name,
-    'Phone number:             ' + lead.phone,
-    'Email:                    ' + lead.email,
-    'State:                    ' + (lead.state || 'Not provided'),
-    'Shortlisted universities: ' + (lead.shortlist || 'Not provided'),
-    'Submitted:                ' + lead.timestamp,
-    'Source page:              ' + lead.source_page,
-    '',
-    'Additional notes:',
-    lead.notes || 'No additional notes.',
-    '',
-    'Reply to this email to answer ' + lead.full_name + ' directly.'
-  ].join('\n');
-
-  return { subject: subject, html: html, text: text };
+/** Run once in a standalone project: paste the Website Leads ID (the long
+ *  part of its URL between /d/ and /edit). */
+function setSheetId() {
+  var id = 'PASTE-THE-SPREADSHEET-ID-HERE';
+  if (/PASTE/.test(id)) throw new Error('Replace the placeholder with the Website Leads spreadsheet ID first.');
+  SpreadsheetApp.openById(id);
+  PropertiesService.getScriptProperties().setProperty('SHEET_ID', id);
+  return 'Sheet linked.';
 }

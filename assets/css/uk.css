@@ -2272,3 +2272,119 @@ html.sp-open{overflow: hidden;}
 .site-header.is-solid{background: rgba(243, 239, 230, .98);}
 .ug-bar{-webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(255, 255, 255, .95);}
 .uk-strip{-webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(8, 18, 42, .78);}
+
+/* ===== Enquiry form step 2 (Finland lead flow): study level, intake, State + call time, completed panel ===== */
+#contact .lv{margin: 0 0 10px; border: 0; padding: 0;}
+#contact .lv-l{display: block; margin: 0 0 6px; font-size: .78rem; font-weight: 800; letter-spacing: .02em; color: #0b1b3a;}
+#contact .lv-row{display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;}
+#contact .lv-c{position: relative; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border: 1.5px solid var(--field, rgba(11,27,58,.18)); border-radius: 12px; background: #fff; cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s;}
+#contact .lv-c input,#contact .pill input{position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none;}
+#contact .lv-ic{flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: rgba(200,16,46,.08); color: #c8102e; transition: background .2s, color .2s;}
+#contact .lv-c b{font-size: .84rem; line-height: 1.15; color: #0b1b3a;}
+#contact .lv-c:hover{border-color: rgba(11,27,58,.35);}
+#contact .lv-c:has(input:checked){border-color: #c8102e; background: #fff7f8; box-shadow: 0 0 0 3px rgba(200,16,46,.12);}
+#contact .lv-c:has(input:checked) .lv-ic{background: #c8102e; color: #fff;}
+#contact .lv-c:has(input:focus-visible),#contact .pill:has(input:focus-visible){outline: 2px solid #0b1b3a; outline-offset: 2px;}
+#contact .lv.is-invalid .lv-c{border-color: var(--err, #c8102e);}
+#contact .lv .fl-msg{padding-left: 2px;}
+#contact .pill-row{display: flex; flex-wrap: wrap; gap: 6px;}
+#contact .pill{position: relative; display: inline-flex; cursor: pointer;}
+#contact .pill span{display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(11,27,58,.18); background: #fff; font-size: .82rem; font-weight: 700; color: #0b1b3a; transition: background .2s, color .2s, border-color .2s;}
+#contact .pill:has(input:checked) span{background: #0b1b3a; border-color: #0b1b3a; color: #fff;}
+#contact .fl-duo{display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; margin-bottom: 12px;}
+#contact .fl-duo > .fl{margin-bottom: 0;}
+#contact .wiz-step .fl-duo{margin-bottom: 8px;}
+@media (max-width: 759px){#contact .lv-row{grid-template-columns: 1fr 1fr;} #contact .lv-c{min-height: 40px;} #contact .fl-duo{gap: 0 8px;}}
+@media (max-width: 380px){#contact .fl-duo{grid-template-columns: 1fr; gap: 8px 0;}}
+/* "Form completed" */
+#contact .form-done .check-draw{display: block;}
+#contact .form-done .done-kick{display: inline-block; margin: 0 0 6px; padding: 4px 10px; border-radius: 999px; background: rgba(22,163,74,.1); color: #15803d; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;}
+#contact .form-done .done-next{display: grid; gap: 6px; justify-content: center; margin: 14px 0 0; padding: 0; list-style: none; font-size: .9rem; color: #2a3348;}
+#contact .form-done .done-next li{display: inline-flex; align-items: flex-start; gap: 8px; line-height: 1.45; text-align: left;}
+#contact .form-done .done-next svg{flex: none; margin-top: calc((1.45em - 17px) / 2); color: #c8102e;}
+#contact .form-done .done-row{margin-top: 18px;}
+#contact .done-again{margin-top: 14px; padding: 6px 4px; border: 0; background: none; color: #0b1b3a; font: inherit; font-size: .9rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;}
+#contact .done-again:hover{color: #c8102e;}
+#contact .done-again:focus-visible{outline: 2px solid #0b1b3a; outline-offset: 2px; border-radius: 4px;}
+/* phones: keep step 2 within one screen — chips and pills each on one row, the
+   State + call time pair side by side, the shortlist only once something is hearted */
+@media (max-width: 759px){
+#contact .lv{margin-bottom: 8px;}
+#contact .lv-l{margin-bottom: 4px; font-size: .74rem;}
+#contact .lv-row{grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px;}
+#contact .lv-c{justify-content: center; min-height: 36px; padding: 4px 4px; border-radius: 10px; text-align: center;}
+#contact .lv-ic{display: none;}
+#contact .lv-c b{font-size: .74rem;}
+#contact .pill-row{display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px;}
+#contact .pill span{justify-content: center; width: 100%; min-height: 32px; padding: 0 6px; font-size: .72rem; text-align: center; line-height: 1.1;}
+#contact .wiz-step .fl-duo{margin-bottom: 7px;}
+}
+@media (max-width: 380px){#contact .fl-duo{grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 6px;}}
+@media (max-width: 339px){#contact .fl-duo{grid-template-columns: 1fr; gap: 7px 0;}}
+#contact .fl[data-sl-field][hidden]{display: none;}
+@media (max-width: 759px) and (max-height: 760px){
+#contact .wiz-step[data-wiz="2"] > .wiz-h{position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;}
+#contact .lv{margin-bottom: 6px;}
+#contact .lv-c{min-height: 32px;}
+#contact .pill span{min-height: 29px;}
+#contact .wiz-step[data-wiz="2"] .fl-duo,#contact .wiz-step[data-wiz="2"] .fl{margin-bottom: 6px;}
+}
+@media (max-width: 759px) and (max-height: 600px){#contact .lv-l{display: none;} #contact .lv{margin-bottom: 5px;}}
+/* Narrow form column (the side-by-side card at ~1024px, and phones): nothing in
+   step 2 or the ticket may clip. The study-level chips go 2 × 2 above phone
+   size; the State / call-time pair drops its icons and lets a long choice wrap
+   onto a second line instead of ending in "…". */
+#contact [data-lead-form]{container: leadform / inline-size;}
+@media (min-width: 760px){@container leadform (max-width: 440px){#contact .lv-row{grid-template-columns: 1fr 1fr;}}}
+#contact .fl-duo > .fl{display: flex; flex-direction: column;}
+#contact .fl-duo .dd{flex: 1; display: flex; flex-direction: column;}
+#contact .fl-duo .dd-btn{flex: 1; height: auto; min-height: 58px;}
+#contact .fl-duo .dd-val{white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2;}
+@media (max-width: 759px){#contact .fl-duo .dd-btn{min-height: 52px;}}
+@container leadform (max-width: 440px){
+#contact .fl-duo .fl.has-ic .fl-ic{display: none;}
+#contact .fl-duo .fl.has-ic .dd-btn{padding-left: 14px; padding-right: 30px;}
+#contact .fl-duo .fl.has-ic > label{left: 15px; max-width: calc(100% - 40px);}
+}
+#contact .tk-end{flex: none;}
+#contact .tk-line{min-width: 14px;}
+/* No clipped wording: every text block shows in full at every width (the
+   earlier phone pass shortened these with line clamps and "…"). */
+#why-uk .wy-cap-line,#worries .worry-line,#scholarships .fd-panel p,#journey .wh-d,
+#faq .ft-q,#faq .ft-grid .ft-q,.nt .news-h,#universities .ug-name,#services .svc-text p,
+#services .cg-reel .svc-item .svc-text > p,.uk-hero-sub,#relocate .hs-p-lead,#testimonials .rl-q,
+#relocate .family-copy > p,#universities .ug-subj{-webkit-line-clamp: unset !important; overflow: visible !important; white-space: normal !important; text-overflow: clip !important;}
+/* the reviews grid must not widen to the marquee's full length, or "Pause
+   reviews" is centred thousands of pixels off screen */
+.rl{grid-template-columns: minmax(0, 1fr);}
+/* 320px phones: these rows were one line wider than the screen and their
+   section clipped the end ("Northern Ireland", "Or ask on WhatsApp",
+   "Plan my family's move") */
+@media (max-width: 359px){
+.uk-why .wy-tabs{gap: 0; padding: 3px;}
+.uk-why .wy-tabs button{padding: 0 6px; font-size: .68rem;}
+#worries .wf-actions{flex-wrap: wrap;}
+#relocate .family-copy{flex-wrap: wrap;}
+}
+/* Phones: the country-code box has no floating label, so its flag, code and
+   chevron sit on the centre line with room kept for the chevron; the State /
+   call-time pair may grow when a long choice wraps. */
+@media (max-width: 759px){
+#contact .wiz-step .fl.fl-code .dd-btn{padding-top: 0; padding-bottom: 0;}
+#contact .wiz-step .fl-duo .fl.fl-select,#contact .wiz-step .fl-duo .fl.fl-select .dd,#contact .wiz-step .fl-duo .fl.fl-select .dd-btn{height: auto; min-height: 50px;}
+#contact .wiz-step .fl-duo .fl.fl-select .dd-btn{padding-bottom: 6px;}
+}
+@media (max-width: 759px) and (max-height: 620px){#contact .wiz-step .fl-duo .fl.fl-select,#contact .wiz-step .fl-duo .fl.fl-select .dd,#contact .wiz-step .fl-duo .fl.fl-select .dd-btn{min-height: 44px;}}
+@media (max-width: 420px){#contact .wiz-step .fl.fl-code .dd-btn{padding-right: 26px;} #contact .fl-code .dd-chev{right: 7px;}}
+@media (max-width: 340px){#contact .fl-code .dd-val{gap: 4px; font-size: .84rem;} #contact .fl-code .dd-flag{width: 18px; height: 13px;}}
+/* Tutee AI: lists, links and suggested next questions in answers */
+.msg ul,.msg ol{margin: 6px 0 0; padding-left: 1.3em;}
+.msg ul{list-style: disc;}
+.msg ol{list-style: decimal;}
+.msg li{margin: 3px 0; padding-left: 2px;}
+.msg ul + p,.msg ol + p{margin-top: 8px;}
+.msg.ai a{color: #c8102e; font-weight: 700; text-decoration: underline; text-underline-offset: 2px;}
+.msg.ai a:hover{color: #0b1b3a;}
+.msg.ai a:focus-visible{outline: 2px solid #0b1b3a; outline-offset: 2px; border-radius: 3px;}
+.chat-next{align-self: flex-start; max-width: 100%;}
+.chat-next button{white-space: normal; text-align: left; line-height: 1.25; font-size: .8rem; padding: 7px 12px;}

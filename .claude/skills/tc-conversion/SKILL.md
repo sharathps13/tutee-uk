@@ -79,16 +79,17 @@ plain statements of what the consultation includes.
 
 ## Lead pipeline and measurement (verified facts, keep them true)
 
-- The only lead path is the two-step consultation form → `POST /api/enquiry`
-  (`netlify/functions/enquiry.mjs`) → Google Apps Script (env `APPS_SCRIPT_URL`,
-  `APPS_SCRIPT_SECRET`, server-side only) → a row in the Google Sheet + an email to
-  digital@tuteeconnect.com. Supabase is read-only (universities); there is no tutor registration
+- Leads come from the two-step consultation form and the Tutee AI chat ("Request a callback")
+  → `POST /api/enquiry` (`netlify/functions/enquiry.mjs`) → the shared Website Leads Apps Script
+  (env `APPS_SCRIPT_URL`, `APPS_SCRIPT_TOKEN`, `SITE_COUNTRY=UK`, server-side only) → a row in
+  the "UK Leads" tab + an email to business@tuteeconnect.com (see `apps-script/README.md`). Supabase is read-only (universities); there is no tutor registration
   and no analytics provider. Never post leads to Supabase or anywhere else from the browser.
 - Verify changes to the pipeline locally first: run the real function against a mock Apps Script
   on localhost (pattern: import the default export, POST a `Request`, check status + forwarded body).
   `tools/dev/serve-with-api.mjs` does this for the whole page: `node tools/dev/serve-with-api.mjs . 8790`
-  serves the site and routes `/api/enquiry` to the real handler, forwarding to a mock Apps Script
-  that logs to `tools/dev/mock-leads.jsonl` (create `tools/dev/mock-fail.flag` to test failures).
+  serves the site with the production CSP and routes `/api/enquiry` to the real handler, forwarding
+  to a stand-in that runs the real `apps-script/Code.gs` and logs what it received, the sheet row
+  and the email to `tools/dev/mock-leads.jsonl` (create `tools/dev/mock-fail.flag` to test failures).
   A live end-to-end test sends a real email and sheet row, so it needs the owner's explicit
   approval, clearly marked test data, and is done once.
 - Conversion events go through `window.TC_track` (in `assets/js/atlas.js`), which pushes to

@@ -1152,6 +1152,7 @@ html:not(.js) [data-wiz-next], html:not(.js) [data-wiz-back], html:not(.js) .wiz
   .talk small { font-size: 10.5px; }
   .talk-ic { width: 34px; height: 34px; border-radius: 10px; }
   .talk li:nth-child(n + 3) { grid-column: 1 / -1; }   /* email and website: full width, never cut off */
+  @media (max-width: 359px) { .talk { grid-template-columns: 1fr; } .talk li { grid-column: 1 / -1; } }   /* 320px: the phone numbers need the full width too */
   .reply { margin-top: 10px; font-size: 12.5px; }
   .foot-bottom { gap: 6px; padding-top: 16px; font-size: 12px; line-height: 1.5; }
   .foot-bottom [data-photo-credit] { font-size: 11px; color: rgba(74, 95, 92, .85); }
@@ -1485,3 +1486,14 @@ body { transition: opacity .35s cubic-bezier(.2, .7, .2, 1); }
 html.arriving body, html.leaving body, html.hopping body { opacity: 0; }
 html.leaving body, html.hopping body { transition-duration: .18s; transition-timing-function: ease-in; }
 @media (prefers-reduced-motion: reduce) { body { transition: none; } }
+/* Tutee AI: lists, links and suggested next questions in answers */
+.msg ul, .msg ol { margin: 6px 0 0; padding-left: 1.3em; }
+.msg ul { list-style: disc; }
+.msg ol { list-style: decimal; }
+.msg li { margin: 3px 0; padding-left: 2px; }
+.msg p + p, .msg ul + p, .msg ol + p { margin-top: 8px; }
+.msg.ai a { color: var(--maroon); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.msg.ai a:hover { color: var(--night); }
+.msg.ai a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 3px; }
+.chat-next { align-self: flex-start; max-width: 100%; }
+.chat-next button { white-space: normal; text-align: left; line-height: 1.25; font-size: 13px; padding: 7px 12px; cursor: pointer; }
