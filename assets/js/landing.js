@@ -1950,7 +1950,7 @@
     { id: 'accom', k: 'accommodation housing pre-departure briefing arrive arrival land landing post-landing gp national insurance brp evisa', sec: '#faq',
       a: 'Yes. We partner with top student housing providers to secure safe, comfortable accommodation near your campus, and run **pre-departure briefings** on UK culture, academic expectations, packing and immigration.\n\nAfter you land, your consultant helps with **accommodation, your eVisa/BRP, GP registration (NHS), National Insurance number, a UK bank account** and finding permitted **part-time work**.' },
     { id: 'work', k: 'work part-time job while studying earn hours', sec: '#journey', specific: true,
-      a: 'After you land, our **post-landing support** helps you find **permitted term-time part-time work** (it\'s part of step 6 of your journey). After graduation, the **Graduate Route** lets you work in the UK for two years if you apply by 31 December 2026, or 18 months from 1 January 2027 (three after a PhD), with no sponsor needed.\n\nThe exact weekly hours you may work aren\'t listed on this page — they depend on your visa conditions, so an advisor confirms them for your case.' },
+      a: 'Yes. On a Student visa at degree level you can usually work up to **20 hours a week in term time** and **full time in official holidays**. After you land, our **post-landing support** helps you find permitted part-time work (it\'s part of step 6 of your journey). After graduation, the **Graduate Route** lets you work in the UK for two years if you apply by 31 December 2026, or 18 months from 1 January 2027 (three after a PhD), with no sponsor needed.\n\nYour exact conditions are printed on your visa and depend on your course level, so an advisor confirms them for your case.' },
     { id: 'journey', k: 'journey steps stages timeline step roadmap', sec: '#journey',
       a: 'Your UK journey in 8 steps:\n**Before you fly** — 1. Free profile evaluation · 2. English test · 3. University offer · 4. Documents & CAS · 5. Student visa\n**When you land** — 6. Accommodation, eVisa, GP, NI number, bank account and part-time work\n**After graduation** — 7. Graduate Route · 8. Settlement (Skilled Worker, then ILR, with your family alongside you)' },
     { id: 'whyuk', k: 'why britain study united kingdom benefit benefits advantage advantages', sec: '#why-uk',
@@ -1961,7 +1961,7 @@
       a: 'We have **200+ UK university tie-ups**. On the map you can explore top-ranked universities in London, Oxford, Cambridge, Edinburgh, Manchester, Coventry, Bristol, Glasgow and Durham, and the universities page lists **all 499 UK institutions** (24 in the Russell Group) with search and filters.\n\nOpen any university for its details, heart it to shortlist, then apply for a free consultation with your shortlist attached.' },
     { id: 'russell', k: 'russell group', sec: '#universities',
       a: 'The **Russell Group** is a group of **24 leading research-intensive UK universities**. All the top-ranked universities on our map — Oxford, Cambridge, Imperial, UCL, LSE, Edinburgh, King\'s, Manchester, Bristol, Warwick, Glasgow and Durham — are Russell Group members.' },
-    { id: 'intake', k: 'intake intakes january september may when start starting deadline deadlines semester session admission dates', sec: '#contact', form: true, specific: true,
+    { id: 'intake', k: 'intake intakes when start starting deadline deadlines semester session admission dates', sec: '#contact', form: true, specific: true,
       a: 'This page doesn\'t list intake dates or application deadlines — they differ by university and course. Tell us which universities you\'re considering in the free consultation form and your counsellor will confirm the intakes and deadlines that fit your plans.' },
     { id: 'levels', k: 'undergraduate bachelor bachelors postgraduate master masters mba phd doctorate research level levels degree pursue', sec: '#services',
       a: 'Yes — we guide students for **Undergraduate**, **Master\'s**, **MBA** and **PhD / research** study in the UK. UK Master\'s degrees are typically **one year**, some MBAs ask for work experience or a **GMAT**, and **PhD / research** students (with MRes students) can also bring their family. Mention your level in the free consultation and your counsellor builds the shortlist around it.' },
@@ -2071,6 +2071,66 @@
     var low = q.toLowerCase();
     for (var i = PLACES.length - 1; i >= 0; i--) if (new RegExp('\\b' + PLACES[i] + '\\b').test(low)) return PLACES[i];
     return null;
+  }
+  /* places people name in a "near …" question and the city they're in on the
+     university list: [words for reading typos, pattern, city] */
+  var NEAR = /\b(near|nearby|close to|closest to|nearest|next to|walking distance|close by|around|distance from)\b/i;
+  var LANDMARKS = [
+    ['westminster parliament palace buckingham canary wharf trafalgar piccadilly camden shoreditch covent heathrow wembley greenwich kensington',
+      /\bbig\s?be+n+\b|\blondon\s?ey\w*|\bbuck\w*\s+pal\w*|\bwestminster\b|\bhouses? of parliament\b|\btower (bridge|of london)\b|\bthe shard\b|\bcanary wharf\b|\btrafalgar\b|\bpiccadilly circus\b|\bhyde park\b|\bcamden\b|\bshoreditch\b|\bcovent garden\b|\bking.?s cross\b|\boxford (street|circus)\b|\bheathrow\b|\bwembley\b|\bgreenwich\b|\bkensington\b|\bbritish museum\b/i, 'London'],
+    ['trafford etihad', /\bold\s?traf+ord\b|\betihad\b|\bpiccadilly gardens\b/i, 'Manchester'],
+    ['castle holyrood', /\bedinburgh castle\b|\broyal mile\b|\bholyrood\b|\barthur.?s seat\b|\bprinces street\b/i, 'Edinburgh'],
+    ['anfield cavern goodison', /\banfield\b|\balbert dock\b|\bcavern club\b|\bgoodison\b/i, 'Liverpool'],
+    ['bullring edgbaston cadbury', /\bbull\s?ring\b|\bedgbaston\b|\bvilla park\b|\bcadbury world\b/i, 'Birmingham'],
+    ['kelvingrove ibrox celtic', /\bkelvingrove\b|\bgeorge square\b|\bibrox\b|\bceltic park\b/i, 'Glasgow'],
+    ['principality millennium', /\b(principality|millennium) stadium\b|\bcardiff (castle|bay)\b/i, 'Cardiff'],
+    ['titanic', /\btitanic\b/i, 'Belfast'],
+    ['clifton suspension', /\bclifton\b/i, 'Bristol'],
+    ['roman baths', /\broman baths?\b/i, 'Bath'],
+    ['minster shambles', /\byork minster\b|\bthe shambles\b/i, 'York']
+  ];
+  // a town on the university list named after "near" ("near Lancaster")
+  function nearTown(q) {
+    var towns = {};
+    uniData().forEach(function (u) { var c = String(u.location || '').split(',')[0].trim().toLowerCase(); if (c.length > 2) towns[c] = 1; });
+    return Object.keys(towns).sort(function (a, b) { return b.length - a.length; }).filter(function (t) {
+      return new RegExp(NEAR.source + '\\s+(the\\s+)?((city|town) of\\s+)?' + t.replace(/[^a-z ]/g, '.') + '\\b', 'i').test(q);
+    })[0] || null;
+  }
+  // "universities near Big Ben": the city the place is in, never a generic answer
+  function nearAnswer(q) {
+    if (!NEAR.test(q)) return null;
+    var spot = LANDMARKS.filter(function (l) { return l[1].test(q); })[0];
+    if (!spot && findPlace(q)) return null;   // "near Oxford" is the usual city answer
+    var town = spot ? spot[2].toLowerCase() : nearTown(q), list = town ? unisIn(town) : [];
+    if (!town && findUni(q)) return null;   // "near UCL" is about UCL
+    if (list.length) {
+      var a = listAnswer(list, 'Universities in ' + cap(town), town);
+      a.text = (spot ? 'That\'s in **' + spot[2] + '**, so here are the universities there. ' : '') + 'This goes by city, not travel time — your counsellor can help with commutes from where you\'ll live.\n\n' + a.text;
+      a.place = town;
+      return a;
+    }
+    if (/\b(universit\w*|unis?|colleges?|institutions?|campus\w*|study)\b/i.test(q) && !/\b(rent|cost|costs|price|fees?|accommodation|housing|living)\b/i.test(q))
+      return { text: 'I can match universities to a UK city or town, or to a well-known place in one (Big Ben, the Royal Mile or Old Trafford, say), but I didn\'t recognise the place in your question — and I can\'t work out distances. Tell me the city, e.g. ' + askLink('universities in Manchester', 'Universities in Manchester') + ', or ask a counsellor.', topic: 'near' };
+    return null;
+  }
+  // a start month ("programmes in the January intake"): the page lists no dates, so say what's usual and hand over
+  var INTAKE_MONTH = /\b(jan\w*|feb\w*|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
+  var MONTH_NAMES = { jan: 'January', feb: 'February', mar: 'March', apr: 'April', may: 'May', jun: 'June', jul: 'July', aug: 'August', sep: 'September', oct: 'October', nov: 'November', dec: 'December' };
+  function intakeAnswer(q) {
+    var m = INTAKE_MONTH.exec(q);
+    if (/\b(work\w*|jobs?|hours)\b/i.test(q)) return null;
+    // "when is the intake?" with no month: the usual starts
+    if (!m && /\b(intakes?|start dates?)\b/i.test(q)) return { text: 'Most UK courses start in **September** (some in October), the main intake. Many universities also have a **January** intake, mostly for postgraduate taught courses, and a few have a **May** start. Application deadlines differ by university and course.\n\nTell us which universities you\'re considering in the free consultation form and your counsellor will confirm the intakes and deadlines that fit your plans.', sec: '#contact', form: true, topic: 'intake' };
+    if (!m || !/\b(intakes?|start\w*|begin\w*|commenc\w*|batch|session|programmes?|programs?|courses?|admissions?|join\w*)\b/i.test(q)) return null;
+    // "may" is also an everyday word: only a month next to "in", "from" or "the"
+    if (/^may$/i.test(m[1]) && !/\b(in|from|for|the)\s+may\b/i.test(q)) return null;
+    var mon = MONTH_NAMES[m[1].slice(0, 3).toLowerCase()], text;
+    if (mon === 'September' || mon === 'October') text = '**September** (some courses start in October) is the main UK intake: most undergraduate and postgraduate courses start then. Application deadlines differ by university and course.';
+    else if (mon === 'January' || mon === 'February') text = 'Many UK universities have a **January** intake as well as the main September one, mostly for **postgraduate taught (master\'s)** courses and some foundation and pathway programmes. Fewer courses start in January than in September, and which ones do changes every year, so I can\'t give you a reliable list here.';
+    else if (mon === 'April' || mon === 'May' || mon === 'June') text = 'A few UK universities have a **May** intake, for a small set of mainly postgraduate courses. Most courses start in **September**, with a smaller **January** intake. Which courses run in May changes every year, so I can\'t give you a reliable list here.';
+    else text = 'UK courses mainly start in **September**, with a smaller **January** intake and a few **May** starts. A **' + mon + '** start is rare, so check with a counsellor before you plan around it.';
+    return { text: text + '\n\nTell us which universities you\'re considering in the free consultation form and your counsellor will confirm the ' + (/^(January|February|April|May|June)$/.test(mon) ? mon + ' ' : '') + 'courses and deadlines for your subject.', sec: '#contact', form: true, topic: 'intake' };
   }
   function unisIn(place) {
     var p = place.toLowerCase();
@@ -2289,6 +2349,8 @@
     passages.forEach(function (p) { add(p.title + ' ' + p.text); });
     uniData().forEach(function (u) { add(u.name + ' ' + u.location + ' ' + u.programs, 2); });
     PLACES.forEach(function (p) { add(p, 5); });
+    LANDMARKS.forEach(function (l) { add(l[0], 4); });
+    add('program programs programme programmes intake intakes january february september october', 4);
     Object.keys(SYN).forEach(function (k) { add(k, 3); });
     add('what where which when whats tell about compare versus better difference between best top universities university college colleges study studying course courses scholarship scholarships ranking ranked located known these those them more request callback counsellor counselor advisor hello thanks thank please', 5);
     rawDict = f; rawKeys = Object.keys(f);
@@ -2399,11 +2461,37 @@
   ];
   function kbById(id) { for (var i = 0; i < KB.length; i++) if (KB[i].id === id) return KB[i]; return null; }
   function fromKB(id, extra) { var e = kbById(id); return { text: e.a + (extra || ''), sec: e.sec, form: e.form, topic: id }; }
+  // Questions this site can't answer reliably (distances and travel times, whether your marks are enough, what can
+  // still start next month, the best area to live, a university's exact English score): say so, then hand over.
+  var NEEDS_COUNSELLOR = [
+    [/\b(how far|distance (from|to|between)|how long (does it|will it|would it|to) (take|get|reach|travel|commute)|commut\w*|by (train|bus|metro|tram|mrt|subway|tube|car)|travel time|minutes? (from|to|away)|km (from|to|away)|close to the city|far from)\b/, null,
+      'I can\'t give reliable distances or travel times: they depend on the exact campus and where you\'d live.'],
+    [/\b(next|this|coming) (month|week|few weeks)\b|\bstart\w* (soon|immediately|asap|right away)\b|\b(still|currently) (open|accepting)\b/, null,
+      'Which courses can still take you that soon depends on each university\'s current deadlines and places, which change all the time.'],
+    [/\b\d{2}(\.\d+)? ?(%|percent)|\b(percentage|marks|cgpa|gpa|backlogs?|gap year|study gap|year gap|education gap)\b/, /\b(admission|admit|get in|get into|eligib\w*|accept\w*|apply|qualify|enough|chances?|possible)\b/,
+      'Whether your marks are enough depends on the university, the course and the rest of your profile, so I won\'t guess.'],
+    [/\b(best|good|safe|safest|cheap\w*|nice) (area|areas|suburbs?|neighbou?rhoods?|localit(y|ies)|places?|part of (the )?(city|town)) (to (live|stay)|for students?)\b|\bwhere (should|can|do) (i|students) (live|stay)\b/, null,
+      'The best area to live depends on your campus, budget and lifestyle, and this site doesn\'t compare neighbourhoods.'],
+    [/\b(ielts|pte|toefl|duolingo)\b.*\b(scores?|bands?|minimum)\b|\b(scores?|bands?|minimum)\b.*\b(ielts|pte|toefl|duolingo)\b/, null,
+      'Each university sets its own minimum English test score, and it varies by course, so I won\'t quote one.'],
+    [/\b(distance learning|distance education|online (course|courses|degree|degrees|study|studies|classes|programmes?|programs?)|study online|studying online|remote study)\b/, null,
+      'A student visa is for full-time study on campus, and this site does not cover online or distance courses.']
+  ];
+  // "How do I apply?" (to a university, not for a visa, loan or scholarship): how applying works here, then hand over
+  var APPLY_Q = /\b(how (do|can|should|would|will) (i|we|one|students?) apply|how to apply|application process|admission process|applying (to|for) (a |an |the )?(universit\w*|unis?|college\w*|courses?|programm?e?s?|admissions?)|apply (to|for) (a |an |the )?(universit\w*|unis?|college\w*|courses?|programm?e?s?|admissions?))\b/;
+  function asksHowToApply(q) { return APPLY_Q.test(q) && !/\b(visa|pass|permit|stamp|loans?|scholarships?|bursar\w*|grants?|jobs?|work)\b/.test(q); }
+  function needsCounsellor(q) {
+    for (var i = 0; i < NEEDS_COUNSELLOR.length; i++) { var n = NEEDS_COUNSELLOR[i]; if (n[0].test(q) && (!n[1] || n[1].test(q))) return n[2]; }
+    return '';
+  }
+  // "universities near <a place we know>" is answered by its city instead
+  function namesLandmark(q) { return /b(near|nearby|nearest|close to|closest to|next to|around|walking distance)b/.test(q) && LANDMARKS.some(function (l) { return l.some(function (x) { return x instanceof RegExp && x.test(q); }); }); }
+
   function answer(text) {
     var raw = String(text || '').trim(), r;
     kbIndex();   // picks up the live lender list and news headlines
     for (var i = 0; i < SMALL.length; i++) if (SMALL[i][0].test(raw) && tokens(raw).length <= 3) { r = { text: SMALL[i][1], small: true }; r.next = nextFor(r); return r; }
-    var fix = correctTypos(raw);
+    var fix = correctTypos(raw.replace(/\bIT\b/g, 'computing'));   // "IT" only in capitals: "is it ranked?" is not about computing
     r = answerCore(fix.q);
     if (fix.fixes.length && !r.unknown) r.text = 'I read ' + fix.fixes.map(function (f) { return '“' + f[0] + '” as **' + f[1] + '**'; }).join(', ') + '.\n\n' + r.text;
     remember(r);
@@ -2412,6 +2500,9 @@
   }
   function answerCore(q) {
     var qt = tokens(q), specific = SPECIFIC.test(q);
+    var unsure = !namesLandmark(q) && needsCounsellor(q.toLowerCase());
+    if (unsure) return { text: unsure + '\n\nA counsellor can check it for your profile: ' + askLink('Request a callback') + ', or book a free consultation.', sec: '#contact', form: true, topic: 'counsellor' };
+    if (asksHowToApply(q.toLowerCase())) return { text: 'How you apply depends on the level:\n• **Undergraduate:** through **UCAS**, the UK\'s central admissions service\n• **Postgraduate:** directly to each university, on its own portal\nOnce you accept an offer, the university issues your **CAS**, which you need for the **Student visa**.\n\nDeadlines and entry requirements differ by university and course, so your counsellor checks them for your shortlist: ' + askLink('Request a callback') + '.', sec: '#contact', form: true, topic: 'apply' };
     // who / what is Tutee Connect (the brand words are stop-words for search)
     if (/\b(who|what)\s+(are|r)\s+(you|u)\b|\b(what|who)\s+is\s+tutee|\babout\s+(tutee|your\s+company|you\s+guys)\b|\btutee\s*connect\b\s*\??$/i.test(q)) {
       return { text: (/\bwho\s+(are|r)\s+(you|u)\b/i.test(q) ? "I'm **Tutee AI**, the assistant for this page — I answer from everything on it.\n\n" : '') + kbById('about').a, sec: '#welcome', topic: 'about' };
@@ -2456,6 +2547,10 @@
     if (/\bstudent\s+visa\b/i.test(q) && !/\b(part.?time|job|jobs|hours|skilled|graduate|family|dependants?|spouse|refus\w*|success)\b/i.test(q)) return fromKB('visa');
     if (/\b(what|which)\b.*\b(need|required|documents?)\b.*\b(apply|application|admission)\b|\b(requirements?|eligib\w*)\b.*\b(apply|admission|uk)\b/i.test(q)) return fromKB('require');
     if (/\bmerit\b/i.test(q) && !findUni(q)) return fromKB('merit');
+    var byMonth = intakeAnswer(q);
+    if (byMonth) return byMonth;
+    var near = nearAnswer(q);
+    if (near) return near;
     // "universities in <place>" (checked first: "in Oxford" is a place, not the
     // university), also as a follow-up: "what about Glasgow?", "and Leeds?"
     var place = findPlace(q), named = findUni(q);
