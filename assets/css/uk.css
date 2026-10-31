@@ -2388,3 +2388,80 @@ html.sp-open{overflow: hidden;}
 .msg.ai a:focus-visible{outline: 2px solid #0b1b3a; outline-offset: 2px; border-radius: 3px;}
 .chat-next{align-self: flex-start; max-width: 100%;}
 .chat-next button{white-space: normal; text-align: left; line-height: 1.25; font-size: .8rem; padding: 7px 12px;}
+/* Contact headline: the reason to fill the form, last words in the light red
+   used by the other dark-section headlines (.wf .uk-h2 em) */
+#contact .contact-copy .uk-h2 em{font-style: normal; color: #ff9b8f;}
+/* Form shortlist (step 1): one chip per hearted university, × removes it
+   everywhere; "+ Add universities" opens the directory. landing.js, renderCarry() */
+#contact .sl-chips{margin: 0 0 12px;}
+#contact .sl-chips[hidden]{display: none;}
+#contact .sl-chips-top{display: flex; align-items: baseline; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 6px;}
+#contact .sl-chips-top .lv-l{margin: 0;}
+#contact .sl-chips-top .lv-l span{color: #c8102e;}
+#contact .sl-chips-top a{display: inline-flex; align-items: center; min-height: 32px; font-size: .8rem; font-weight: 800; color: #a5211a; text-decoration: underline; text-underline-offset: 3px;}
+#contact .sl-chips-top a:hover{color: #0b1b3a;}
+#contact .sl-chips-top a:focus-visible{outline: 2px solid #0b1b3a; outline-offset: 2px; border-radius: 4px;}
+#contact .sl-chips-list{display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none;}
+#contact .sl-chips-list li{display: flex; min-width: 0; max-width: 100%;}
+#contact .carry-chip{display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 34px; padding: 0 8px 0 10px; border: 1.5px solid rgba(11,27,58,.18); border-radius: 999px; background: #fff; color: #0b1b3a; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: background-color .2s, border-color .2s, color .2s;}
+#contact .carry-chip span{min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+#contact .carry-chip .icon{flex: none; width: 14px; height: 14px;}
+#contact .carry-chip .carry-heart{color: #c8102e; fill: currentColor;}
+#contact .carry-chip .carry-x{color: #5b6478;}
+#contact .carry-chip:hover{border-color: #c8102e; background: #c8102e; color: #fff;}
+#contact .carry-chip:hover .icon{color: #fff;}
+#contact .carry-chip:focus-visible{outline: 2px solid #0b1b3a; outline-offset: 2px;}
+#contact .wiz-step > legend:focus{outline: none;}
+@media (max-width: 759px){#contact .sl-chips{margin-bottom: 8px;}
+#contact .sl-chips-top{margin-bottom: 4px;}
+#contact .carry-chip{min-height: 32px; font-size: .74rem;}}
+/* Shortlist hearts on the university cards read as controls at rest (red
+   outline and heart, not grey on white) and ping softly: a ring every 8s,
+   rippling down the list card by card (--i), never all at once. The ping
+   stops once shortlisted, pauses off screen (.is-off) and is off for
+   reduced motion, where the contrast alone carries it. */
+#universities .heart{position: relative;}
+#universities .heart:not([aria-pressed="true"]){border: 1.5px solid var(--red); background: #fff; color: var(--red-2);}
+#universities .heart:not([aria-pressed="true"]):hover{background: var(--red-soft);}
+#universities .heart::after{content: ""; position: absolute; inset: -1.5px; border-radius: 50%; border: 2px solid var(--red); opacity: 0; pointer-events: none;}
+#universities .heart:not([aria-pressed="true"])::after{animation: heartPing 8s var(--e-out) infinite; animation-delay: calc(2s + var(--i, 0) * 240ms);}
+#universities .heart:not([aria-pressed="true"]) .icon{animation: heartBeat 8s ease-in-out infinite; animation-delay: calc(2s + var(--i, 0) * 240ms);}
+@keyframes heartPing{0%{opacity: 0; transform: scale(1);} 2%{opacity: .7;} 16%,100%{opacity: 0; transform: scale(1.65);}}
+@keyframes heartBeat{0%,10%,100%{transform: none;} 3%{transform: scale(1.18);} 6%{transform: scale(.94);}}
+@media (prefers-reduced-motion: reduce){#universities .heart::after,#universities .heart .icon{animation: none !important;}}
+/* Shortlist reminder: a red pill that follows the visitor once something is
+   hearted (landing.js, initShortlistFab). Sits between the dock's Tutee AI
+   and WhatsApp buttons on desktop, just above the dock bar on phones; hidden
+   over the hero (like the dock) and while the form is on screen. */
+.slfab{position: fixed; z-index: 251; left: 50%; bottom: 18px; translate: -50% 0; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); min-height: 52px; padding: 6px 18px 6px 6px; border-radius: var(--r-pill); background: var(--red); color: #fff; font-weight: 700; font-size: .95rem; line-height: 1.2; text-decoration: none; box-shadow: 0 16px 34px -12px rgba(198, 42, 31, .8), 0 4px 14px rgba(15, 27, 45, .25); transition: opacity .3s ease, transform .4s var(--e-out), visibility 0s linear 0s, background-color .2s;}
+.slfab[hidden]{display: none;}
+.slfab:hover{background: var(--red-2);}
+.slfab:focus-visible{outline: 3px solid var(--focus); outline-offset: 3px;}
+.slfab.is-away,.dock.in-hero + .slfab,html.in-hero .slfab{opacity: 0; transform: translateY(18px); visibility: hidden; pointer-events: none; transition: opacity .25s ease, transform .3s ease, visibility 0s linear .3s;}
+.slfab-heart{position: relative; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .18);}
+.slfab-heart .icon{width: 20px; height: 20px; fill: currentColor;}
+.slfab-heart b{position: absolute; top: -5px; right: -7px; min-width: 21px; height: 21px; padding: 0 5px; border-radius: var(--r-pill); display: grid; place-items: center; background: #fff; color: var(--red-2); font-size: .74rem; font-weight: 800; box-shadow: 0 0 0 2px var(--red);}
+.slfab-t{min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+.slfab-go{flex: none; transition: transform .25s var(--e-out);}
+.slfab:hover .slfab-go{transform: translateX(3px);}
+/* entrance (first appearance), bump on every add, settle on a removal */
+.slfab.is-in{animation: slfabIn .55s var(--e-out);}
+.slfab.is-bump{animation: slfabBump .45s cubic-bezier(.3, 1.5, .5, 1);}
+.slfab.is-bump .slfab-heart b{animation: slfabCount .5s var(--e-out);}
+.slfab.is-settle .slfab-heart b{animation: slfabSettle .35s ease-out;}
+.slfab::after{content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;}
+.slfab.is-bump::after{animation: slfabRipple .75s ease-out;}
+@keyframes slfabIn{from{opacity: 0; transform: translateY(26px) scale(.9);} to{opacity: 1; transform: none;}}
+@keyframes slfabBump{0%,100%{transform: none;} 40%{transform: scale(1.12);}}
+@keyframes slfabCount{0%{transform: scale(.4) rotateX(90deg);} 60%{transform: scale(1.35);} 100%{transform: none;}}
+@keyframes slfabSettle{0%{transform: scale(.78);} 100%{transform: none;}}
+@keyframes slfabRipple{0%{opacity: 1; box-shadow: 0 0 0 0 rgba(198, 42, 31, .55);} 100%{opacity: 0; box-shadow: 0 0 0 18px rgba(198, 42, 31, 0);}}
+/* idle cue until it is first used: a soft glow every ~10s */
+.slfab::before{content: ""; position: absolute; inset: -4px; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; box-shadow: 0 0 22px 6px rgba(255, 143, 132, .85);}
+.slfab.is-idle::before{animation: slfabGlow 10s ease-in-out 4s infinite;}
+.slfab.is-away::before{animation-play-state: paused;}
+@keyframes slfabGlow{0%,80%,100%{opacity: 0;} 88%{opacity: 1;}}
+@media (max-width: 759px){.slfab{bottom: calc(72px + env(safe-area-inset-bottom)); min-height: 48px; padding: 4px 14px 4px 4px; gap: 8px; font-size: .88rem;}
+.slfab-heart{width: 40px; height: 40px;}}
+@media (prefers-reduced-motion: reduce){.slfab,.slfab-go{transition: none;}
+.slfab.is-in,.slfab.is-bump,.slfab .slfab-heart b,.slfab::before,.slfab::after{animation: none !important;}}

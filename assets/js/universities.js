@@ -151,16 +151,35 @@
       if (G && !TC.reduce) G.fromTo(heart, { scale: 0.6 }, { scale: 1, duration: 0.5, ease: 'back.out(3)' });
     }
     // any change (card heart, details sheet, form chip) repaints cards and tray
-    if (TC.onShortlist) TC.onShortlist(function () {
+    if (TC.onShortlist) TC.onShortlist(function (name, on) {
       Object.keys(cache).forEach(function (id) { var c = cache[id]; paintHeart(c._uni, $('.uni-heart', c), c); });
-      paintTray(true);
+      paintTray(true, name, on);
     });
-    function paintTray(pulse) {
-      var n = TC.ctx.shortlist.length;
+    // The tray announces every add, not only the first: it bumps (pop +
+    // ripple, unless reduced motion) and reads "Added: <name>" for 2.5s.
+    // Until its button is used it glows softly every ~10s.
+    var trayAdded = $('[data-sl-added]'), trayLast = TC.ctx.shortlist.length, trayT = 0, trayUsed = false;
+    try { trayUsed = sessionStorage.getItem('tc_uk_slfab_used') === '1'; } catch (e) { /* storage unavailable */ }
+    $('.btn', tray).addEventListener('click', function () {
+      trayUsed = true; tray.classList.remove('is-idle');
+      try { sessionStorage.setItem('tc_uk_slfab_used', '1'); } catch (e) { /* private mode */ }
+    });
+    function paintTray(pulse, name, on) {
+      var n = TC.ctx.shortlist.length, was = trayLast;
+      trayLast = n;
       trayN.textContent = n;
       trayNames.textContent = TC.ctx.shortlist.join(', ');
       tray.classList.toggle('is-on', n > 0);
+      tray.classList.toggle('is-idle', n > 0 && !trayUsed);
       if (pulse && n && G && !TC.reduce) G.fromTo(trayN, { scale: 1.6 }, { scale: 1, duration: 0.5, ease: 'back.out(3)' });
+      clearTimeout(trayT);
+      if (on && name && n > was) {
+        trayAdded.textContent = 'Added: ' + name;
+        tray.classList.add('is-added');
+        trayT = setTimeout(function () { tray.classList.remove('is-added'); }, 2500);
+        // the first add is the tray sliding in; later ones bump it
+        if (was && !TC.reduce) { tray.classList.remove('is-bump'); void tray.offsetWidth; tray.classList.add('is-bump'); }
+      } else tray.classList.remove('is-added');
     }
 
     function matches() {

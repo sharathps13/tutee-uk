@@ -61,3 +61,55 @@ body { font-weight: 400; }
 .chat:not(.is-open) { visibility: hidden; }
 /* footer fine print: 4.5:1 or better on the light footer */
 .foot-bottom, .foot-bottom p, .foot-bottom [data-photo-credit] { color: var(--ink-2); }
+
+/* Shortlist hearts read as controls at rest (red outline and heart, not a
+   pale line on white) and ping softly: a ring every 8s, sweeping across the
+   cards a quarter-second apart, never all at once. Stops once shortlisted;
+   off for reduced motion, where the contrast alone carries it. */
+.uni-heart:not([aria-pressed="true"]) { border-color: var(--maroon); color: var(--maroon-2); }
+.uni-heart:not([aria-pressed="true"]):hover { background: #fdf0ee; }
+.uni-heart::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; border: 2px solid var(--maroon); opacity: 0; pointer-events: none; }
+.uni-heart:not([aria-pressed="true"])::after { animation: heartPing 8s var(--ease) 2s infinite; }
+.uni-heart:not([aria-pressed="true"]) .icon { animation: heartBeat 8s ease-in-out 2s infinite; }
+.uni-card:nth-child(8n+2) .uni-heart::after, .uni-card:nth-child(8n+2) .uni-heart .icon { animation-delay: 2.25s; }
+.uni-card:nth-child(8n+3) .uni-heart::after, .uni-card:nth-child(8n+3) .uni-heart .icon { animation-delay: 2.5s; }
+.uni-card:nth-child(8n+4) .uni-heart::after, .uni-card:nth-child(8n+4) .uni-heart .icon { animation-delay: 2.75s; }
+.uni-card:nth-child(8n+5) .uni-heart::after, .uni-card:nth-child(8n+5) .uni-heart .icon { animation-delay: 3s; }
+.uni-card:nth-child(8n+6) .uni-heart::after, .uni-card:nth-child(8n+6) .uni-heart .icon { animation-delay: 3.25s; }
+.uni-card:nth-child(8n+7) .uni-heart::after, .uni-card:nth-child(8n+7) .uni-heart .icon { animation-delay: 3.5s; }
+.uni-card:nth-child(8n) .uni-heart::after, .uni-card:nth-child(8n) .uni-heart .icon { animation-delay: 3.75s; }
+@keyframes heartPing { 0% { opacity: 0; transform: scale(1); } 2% { opacity: .7; } 16%, 100% { opacity: 0; transform: scale(1.65); } }
+@keyframes heartBeat { 0%, 10%, 100% { transform: none; } 3% { transform: scale(1.18); } 6% { transform: scale(.94); } }
+
+/* Shortlist tray: every add bumps it (pop + ripple) and reads
+   "Added: <name>" for 2.5s; until its button is used it glows softly every
+   ~10s (universities.js, paintTray). It stays night-blue: its button is the
+   red action, and night is the strongest contrast on this light page. */
+.sl-tray .btn { min-height: 48px; }
+.sl-count { flex: none; white-space: nowrap; }
+.sl-added { display: none; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--sun); font-weight: 700; font-size: 14px; }
+.sl-tray.is-added .sl-added { display: block; }
+.sl-tray.is-added .sl-names { display: none; }
+.sl-tray.is-bump { animation: slTrayBump .45s cubic-bezier(.3, 1.5, .5, 1); }
+.sl-tray::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
+.sl-tray.is-bump::after { animation: slTrayRipple .75s ease-out; }
+.sl-tray::before { content: ""; position: absolute; inset: -4px; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; box-shadow: 0 0 24px 6px rgba(198, 42, 31, .55); }
+.sl-tray.is-on.is-idle::before { animation: slTrayGlow 10s ease-in-out 4s infinite; }
+@keyframes slTrayBump { 0%, 100% { transform: translate(-50%, 0); } 40% { transform: translate(-50%, 0) scale(1.06); } }
+@keyframes slTrayRipple { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 143, 132, .6); } 100% { opacity: 0; box-shadow: 0 0 0 16px rgba(255, 143, 132, 0); } }
+@keyframes slTrayGlow { 0%, 80%, 100% { opacity: 0; } 88% { opacity: 1; } }
+/* phones: one tight row; while "Added: <name>" shows, it takes the word
+   "shortlisted"'s place next to the count, and the button never spills out */
+.sl-short { display: none; }
+@media (max-width: 700px) {
+  .sl-tray .sl-long { display: none; }
+  .sl-tray .sl-short { display: inline; }
+  .sl-tray { width: max-content; gap: 10px; padding: 6px 6px 6px 16px; }
+  .sl-tray .btn { flex: none; padding: 0 14px; font-size: 13px; }
+  .sl-tray .btn .icon { display: none; }
+  .sl-tray.is-added .sl-word { display: none; }
+  .sl-tray.is-added .sl-added { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; font-size: 12.5px; line-height: 1.2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .uni-heart::after, .uni-heart .icon, .sl-tray.is-bump, .sl-tray::before, .sl-tray::after { animation: none !important; }
+}

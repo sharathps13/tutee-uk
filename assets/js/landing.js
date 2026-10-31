@@ -36,6 +36,15 @@
   var ENQUIRY_ENDPOINT = '/api/enquiry';
   var ctx = { study_level: '', intake: '', funding: '', shortlist: [] };
   var lenis = null;
+  /* The shortlist is kept in this browser (localStorage, as on the Finland
+     site), so the home page, universities.html and a second tab opened from
+     "+ Add universities" all show the same list. See setShort(). */
+  var SL_KEY = 'tc_uk_shortlist';
+  try {
+    var slSaved = JSON.parse(localStorage.getItem(SL_KEY) || '[]');
+    if (Array.isArray(slSaved)) slSaved.forEach(function (u) { if (u && typeof u === 'string' && ctx.shortlist.indexOf(u) === -1) ctx.shortlist.push(u); });
+  } catch (e) { /* storage unavailable */ }
+  function saveShortlist() { try { localStorage.setItem(SL_KEY, JSON.stringify(ctx.shortlist)); } catch (e) { /* private mode */ } }
 
   function enquiryPage() { try { return location.host + location.pathname; } catch (e) { return ''; } }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -900,12 +909,66 @@
     bar.hidden = ctx.shortlist.length === 0;
   }
 
+  /* Shortlist reminder (home page): a floating button that follows the
+   * visitor once a university is hearted and leads to the form with the
+   * shortlist attached (data-goto). Every add bumps it (pop, count flip,
+   * ripple) and its label reads "Added: <name>" for 2.5s; a removal only
+   * settles the count. Until it is first used it glows softly every ~10s.
+   * Hidden while the form is on screen, and over the hero like the dock
+   * (CSS). Reduced motion: no movement, the label still changes. */
+  function initShortlistFab() {
+    var fab = $('[data-slfab]');
+    if (!fab) return;
+    var count = $('[data-slfab-count]', fab), label = $('[data-slfab-label]', fab);
+    var last = 0, addedT = 0, used = false, USED = 'tc_uk_slfab_used';
+    try { used = sessionStorage.getItem(USED) === '1'; } catch (e) { /* storage unavailable */ }
+    function idle(n) { return n + ' shortlisted · Review & send'; }
+    function replay(cls) {
+      if (reduce) return;
+      ['is-in', 'is-bump', 'is-settle'].forEach(function (c) { fab.classList.remove(c); });
+      void fab.offsetWidth;
+      fab.classList.add(cls);
+    }
+    function paint(name, on) {
+      var n = ctx.shortlist.length, was = last;
+      last = n;
+      fab.hidden = n === 0;
+      count.textContent = n;
+      fab.classList.toggle('is-idle', n > 0 && !used);
+      if (!n) { clearTimeout(addedT); fab.classList.remove('is-added'); label.textContent = idle(0); return; }
+      if (on && name && n > was) {
+        // every add, not only the first: the first one is the entrance
+        replay(was ? 'is-bump' : 'is-in');
+        clearTimeout(addedT);
+        label.textContent = 'Added: ' + name;
+        fab.classList.add('is-added');
+        addedT = setTimeout(function () { fab.classList.remove('is-added'); label.textContent = idle(ctx.shortlist.length); }, 2500);
+        return;
+      }
+      clearTimeout(addedT);
+      fab.classList.remove('is-added');
+      label.textContent = idle(n);
+      if (!was) replay('is-in');
+      else if (n < was) replay('is-settle');
+    }
+    fab.addEventListener('click', function () {
+      if (used) return;
+      used = true;
+      fab.classList.remove('is-idle');
+      try { sessionStorage.setItem(USED, '1'); } catch (e) { /* private mode */ }
+    });
+    var contact = $('#contact');
+    if (contact && 'IntersectionObserver' in window) new IntersectionObserver(function (es) { fab.classList.toggle('is-away', es[0].isIntersecting); }, { threshold: 0.15 }).observe(contact);
+    onShortlist(paint);
+    paint();
+  }
+
   /* ================================================================= *
    * Shared shortlist. Every heart (map, directory, details sheet, form
    * chips) goes through setShort(), and anything showing the shortlist
    * subscribes with onShortlist() so all views stay in step.
    * ================================================================= */
-  var slSubs = [];
+  var slSubs = [], slSyncing = false;
   function onShortlist(fn) { slSubs.push(fn); }
   function isShort(name) { return ctx.shortlist.indexOf(name) !== -1; }
   function setShort(name, on) {
@@ -913,11 +976,24 @@
     if (on && i === -1) ctx.shortlist.push(name);
     else if (!on && i !== -1) ctx.shortlist.splice(i, 1);
     else return;
+    if (!slSyncing) saveShortlist();
     if (ctx.shortlist.length) setInterest('University Selection');
     paintShortlist();
     renderCarry();
     slSubs.forEach(function (fn) { fn(name, on); });
   }
+  // another tab changed the shortlist (e.g. hearts added on universities.html
+  // opened from the form): replay the difference here so every view updates
+  window.addEventListener('storage', function (e) {
+    if (e.key !== SL_KEY) return;
+    var next = null;
+    try { next = JSON.parse(e.newValue || '[]'); } catch (er) { return; }
+    if (!Array.isArray(next)) return;
+    slSyncing = true;
+    ctx.shortlist.slice().forEach(function (u) { if (next.indexOf(u) === -1) setShort(u, false); });
+    next.forEach(function (u) { if (u && typeof u === 'string') setShort(u, true); });
+    slSyncing = false;
+  });
 
   /* ================================================================= *
    * University details sheet: facts, what it's known for, how we help,
@@ -1408,8 +1484,6 @@
       dots.forEach(function (d) { var k = +d.getAttribute('data-wiz-dot'); d.classList.toggle('is-on', k === n); d.classList.toggle('is-done', k < n); });
       if (bar) bar.style.transform = 'scaleX(' + n / steps.length + ')';
       steps.forEach(function (s) { s.classList.toggle('is-on', s === to); });
-      var sl = $('textarea[data-ctx="shortlist"]', to);
-      if (sl) fitShortlist(sl);
       if (hasGsap && !reduce && !instant && from !== to) G.fromTo(to, { x: 40 * dir, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: 'expo.out', clearProps: 'x,opacity' });
       if (hasGsap) ScrollTrigger.refresh();
     }
@@ -1417,23 +1491,27 @@
       var f = $('.wiz-step.is-on .dd-btn, .wiz-step.is-on input:not([type="hidden"]):not([tabindex="-1"])', form);
       if (f) f.focus({ preventScroll: true });
     }
-    wiz = { go: go, focus: focusFirst, step: 1 };
-    var nextBtn = $('[data-wiz-next]', form), nextHTML = nextBtn.innerHTML;
-    nextBtn.addEventListener('click', function () {
-      if (!verify) { go(2); if (fine) focusFirst(); return; }
-      nextBtn.disabled = true; nextBtn.innerHTML = '<span>Checking…</span>';
-      verify.step1().then(function (ok) {
-        nextBtn.disabled = false; nextBtn.innerHTML = nextHTML;
-        if (ok) { go(2); focusFirst(); }
-      });
-    });
-    $('[data-wiz-back]', form).addEventListener('click', function () { go(1); if (fine) focusFirst(); });
+    // Continue / Back: the new step's heading takes focus (screen readers hear
+    // where they are) and the top of the form comes back into view if the
+    // step change left it above or below the screen
+    function enter(n) {
+      go(n);
+      var h = $('.wiz-step.is-on > legend', form);
+      if (h) h.focus({ preventScroll: true });
+      var top = form.getBoundingClientRect().top, head = $('[data-header]');
+      var hh = head ? head.offsetHeight : 70;
+      if (top < hh || top > window.innerHeight * 0.6) scrollToEl(form, -(hh + 12));
+    }
+    // step 1's required answers only (initForm adds the study-level check)
+    wiz = { go: go, focus: focusFirst, step: 1, check: function () { return true; } };
+    $('[data-wiz-next]', form).addEventListener('click', function () { if (wiz.check()) enter(2); });
+    $('[data-wiz-back]', form).addEventListener('click', function () { enter(1); });
     $$('select[data-ctx]', form).forEach(function (s) { s.addEventListener('change', function () { ctx[s.getAttribute('data-ctx')] = s.value; }); });
     go(1, true);
   }
 
   /* ================================================================= *
-   * Contact checks for step 1 of the form ("smart validation"):
+   * Contact checks for step 2 of the form ("smart validation"):
    *   name  — letters, at least two characters
    *   phone — length (and leading digit where it is fixed) for the chosen
    *           country; a pasted country code or trunk 0 is stripped
@@ -1583,8 +1661,8 @@
     });
 
     verify = {
-      // every step-1 check, including the mail-domain lookup; focuses the first problem
-      step1: function () {
+      // every contact check, including the mail-domain lookup; focuses the first problem
+      contact: function () {
         touched.name = touched.phone = touched.email = 1;
         var a = runName(), b = runPhone();
         return runEmail(true).then(function (c) {
@@ -1710,34 +1788,37 @@
       goToForm(a.getAttribute('data-intent'));
     });
   }
-  // the shortlist box grows with the list, so no name is ever cut off
-  function fitShortlist(sl) {
-    if (sl.tagName !== 'TEXTAREA' || !sl.offsetParent) return;
-    sl.style.height = 'auto';
-    sl.style.height = sl.scrollHeight + 2 + 'px';
-  }
+  /* The form's shortlist: one chip per hearted university. The posted
+     `shortlist` field always equals the chips ("A, B, C"); × removes a
+     university everywhere (cards, details sheet, floating button). As on the
+     Finland form, the box only shows once something is shortlisted. */
   function renderCarry() {
     var form = $('form[data-lead-form]');
     if (!form) return;
     ['study_level', 'intake', 'funding'].forEach(function (k) { var f = $('[data-ctx="' + k + '"]', form); if (f && ctx[k] && f.value !== ctx[k]) f.value = ctx[k]; });
-    // the shortlist field follows the hearts on the map until the visitor
-    // types in it themselves; after that their text wins
     var sl = $('[data-ctx="shortlist"]', form);
-    if (sl && !sl.hasAttribute('data-typed')) sl.value = ctx.shortlist.join(', ');
-    // as on the Finland form, the shortlist only shows once something is shortlisted
-    if (sl) { var slBox = sl.closest('.fl'); slBox.setAttribute('data-sl-field', ''); slBox.hidden = !ctx.shortlist.length && !sl.value.trim(); fitShortlist(sl); }
-    var list = $('[data-carry-list]', form);
-    if (!list) { bpPaint(); return; }
+    if (sl) sl.value = ctx.shortlist.join(', ');
+    var box = $('[data-carry]', form), list = $('[data-carry-list]', form);
+    if (!box || !list) { bpPaint(); return; }
+    // removing a chip by keyboard keeps your place: focus moves to the next chip
+    var chips = $$('.carry-chip', list), had = chips.indexOf(document.activeElement);
     list.innerHTML = '';
     ctx.shortlist.forEach(function (u) {
-      var b = document.createElement('button');
+      var li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.className = 'carry-chip';
       b.setAttribute('aria-label', 'Remove ' + u + ' from shortlist');
-      b.innerHTML = '♥ ' + esc(u) + '<svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg>';
+      b.innerHTML = '<svg class="icon icon-sm carry-heart" aria-hidden="true"><use href="#i-heart"/></svg><span>' + esc(u) + '</span><svg class="icon icon-sm carry-x" aria-hidden="true"><use href="#i-x"/></svg>';
       b.addEventListener('click', function () { setShort(u, false); });
-      list.appendChild(b);
+      li.appendChild(b);
+      list.appendChild(li);
     });
-    $('[data-carry]', form).classList.toggle('is-on', ctx.shortlist.length > 0);
+    var n = ctx.shortlist.length;
+    box.hidden = !n;
+    $('[data-carry-n]', box).textContent = n ? '(' + n + ')' : '';
+    if (had !== -1) {
+      var next = $$('.carry-chip', list)[Math.min(had, n - 1)] || $('[data-wiz-next]', form);
+      if (next) next.focus({ preventScroll: true });
+    }
     bpPaint();
   }
   function initForm() {
@@ -1752,12 +1833,9 @@
       }
     }
     $$('input, textarea', form).forEach(function (i) { i.addEventListener('input', function () { var fl = i.closest('.fl'); if (fl) fl.classList.remove('is-invalid'); }); });
-    var slField = $('#f-short', form);
-    if (slField) slField.addEventListener('input', function () { slField.setAttribute('data-typed', ''); fitShortlist(slField); });
-    form.addEventListener('reset', function () { if (slField) slField.removeAttribute('data-typed'); });
 
     // Study level is required (as on the Finland form): no option is
-    // preselected, the error shows on submit and clears as soon as one is picked.
+    // preselected, the error shows on Continue and clears as soon as one is picked.
     var levelBox = $('[data-field="study_level"]', form), levelMsg = $('#f-level-msg', form);
     function levelError(on) {
       if (!levelBox) return;
@@ -1766,6 +1844,20 @@
       levelMsg.classList.toggle('is-error', on);
     }
     $$('input[name="study_level"]', form).forEach(function (r) { r.addEventListener('change', function () { levelError(false); }); });
+    // step 1 → step 2 (Continue): only step 1's required answer is checked here
+    function levelOk() {
+      if ($('input[name="study_level"]:checked', form)) return true;
+      if (wiz && wiz.step !== 1) wiz.go(1);
+      levelError(true);
+      var firstLv = $('input[name="study_level"]', form);
+      if (firstLv) firstLv.focus({ preventScroll: true });
+      if (levelBox) {
+        levelBox.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+        if (hasGsap && !reduce) G.fromTo(levelBox, { x: -8 }, { x: 0, duration: 0.5, ease: 'elastic.out(1, .3)' });
+      }
+      return false;
+    }
+    if (wiz) wiz.check = levelOk;
 
     // "Form completed": the panel replaces the form, by name and call time
     function showDone(d, animate) {
@@ -1787,19 +1879,20 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (wiz && wiz.step === 1) { $('[data-wiz-next]', form).click(); return; }
-      if (leadDone()) return;
+      if (leadDone() || btn.disabled) return;
       err.classList.remove('is-on');
+      // step 1 was checked on Continue; checked again in case it was changed via Back
+      if (!levelOk()) return;
+      // step 2: the contact checks, including the mail-domain lookup
+      if (!verify) { send(); return; }
+      btn.disabled = true; btn.innerHTML = '<span>Checking…</span>';
+      verify.contact().then(function (ok) {
+        btn.disabled = false; btn.innerHTML = btnHTML;
+        if (ok) send();
+      });
+    });
+    function send() {
       var name = $('#f-name'), phone = $('#f-phone'), email = $('#f-email');
-      // step 1 was checked before Continue; re-check in case it was edited via Back
-      if (verify && (!checkName(name.value).ok || !checkPhone($('#f-code', form).value, phone.value).ok || !checkEmail(email.value).ok)) { wiz.go(1); verify.step1(); return; }
-      var level = $('input[name="study_level"]:checked', form);
-      if (!level) {
-        levelError(true);
-        var firstLv = $('input[name="study_level"]', form);
-        if (firstLv) firstLv.focus({ preventScroll: true });
-        if (levelBox) levelBox.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
-        return;
-      }
       function val(sel) { var el = $(sel, form); return el ? el.value.trim() : ''; }
       function pick(n) { var r = $('input[name="' + n + '"]:checked', form); return r ? r.value : ''; }
       // Finland's field names: what /api/enquiry and the Website Leads sheet
@@ -1836,7 +1929,7 @@
         })
         .catch(function () { fail('Your details were not sent because the connection dropped. Check your internet and try again.'); })
         .then(function () { btn.disabled = false; btn.innerHTML = btnHTML; });
-    });
+    }
     // "+ Submit another enquiry": forget the sent flag and bring back a fresh form
     $('[data-form-again]', form).addEventListener('click', function () {
       try { localStorage.removeItem(LEAD_DONE_KEY); } catch (e3) { /* private mode */ }
@@ -1857,6 +1950,7 @@
     }
     if (hand && hand.shortlist) {
       hand.shortlist.forEach(function (u) { if (u && typeof u === 'string' && ctx.shortlist.indexOf(u) === -1) ctx.shortlist.push(u); });
+      saveShortlist();
       setInterest(hand.intent || (ctx.shortlist.length ? 'University Selection' : ''));
       paintShortlist();
     }
@@ -2485,7 +2579,7 @@
     return '';
   }
   // "universities near <a place we know>" is answered by its city instead
-  function namesLandmark(q) { return /b(near|nearby|nearest|close to|closest to|next to|around|walking distance)b/.test(q) && LANDMARKS.some(function (l) { return l.some(function (x) { return x instanceof RegExp && x.test(q); }); }); }
+  function namesLandmark(q) { return /\b(near|nearby|nearest|close to|closest to|next to|around|walking distance)\b/.test(q) && LANDMARKS.some(function (l) { return l.some(function (x) { return x instanceof RegExp && x.test(q); }); }); }
 
   function answer(text) {
     var raw = String(text || '').trim(), r;
@@ -2986,6 +3080,7 @@
     initMenu();
     initGoto();
     initForm();
+    initShortlistFab();
     initVerify();
     initRotator();
     initTour();
